@@ -146,6 +146,9 @@
             },
             "type": "array",
             "title": "Outgoing Entries"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceOut"
           }
         },
         "additionalProperties": false,
@@ -161,9 +164,111 @@
           "result_code",
           "warnings",
           "income_entries",
-          "outgoing_entries"
+          "outgoing_entries",
+          "resilience"
         ],
         "title": "OverviewResponse"
+      },
+      "ResilienceOut": {
+        "properties": {
+          "accessible_savings": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accessible Savings"
+          },
+          "protected_reserve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Reserve"
+          },
+          "current_account_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Account Balance"
+          },
+          "known_arrears": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Arrears"
+          },
+          "savings_above_reserve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Savings Above Reserve"
+          },
+          "reserve_gap": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reserve Gap"
+          },
+          "result_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accessible_savings",
+          "protected_reserve",
+          "current_account_balance",
+          "known_arrears",
+          "savings_above_reserve",
+          "reserve_gap",
+          "result_code",
+          "warnings"
+        ],
+        "title": "ResilienceOut"
       }
     }
   }

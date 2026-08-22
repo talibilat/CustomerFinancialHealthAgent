@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import { getOverviewOverviewGet } from '@/api/generated'
-import type { MoneyEntryOut, OverviewResponse } from '@/api/generated'
+import type { MoneyEntryOut, OverviewResponse, ResilienceOut } from '@/api/generated'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Accordion,
@@ -85,66 +85,147 @@ function EntryList({ title, entries }: { title: string; entries: MoneyEntryOut[]
   )
 }
 
-function OverviewContent({ overview }: { overview: OverviewResponse }) {
+const RESILIENCE_PRESENTATION: Record<string, { label: string; badgeVariant: 'secondary' | 'destructive' | 'outline' }> = {
+  above_reserve: { label: 'Above protected reserve', badgeVariant: 'secondary' },
+  at_reserve: { label: 'At protected reserve', badgeVariant: 'outline' },
+  below_reserve: { label: 'Below protected reserve', badgeVariant: 'destructive' },
+}
+
+function ResilienceBadge({ resultCode }: { resultCode: string }) {
+  const presentation = RESILIENCE_PRESENTATION[resultCode]
+  if (!presentation) return null
+  return <Badge variant={presentation.badgeVariant}>{presentation.label}</Badge>
+}
+
+function ResilienceCard({ resilience }: { resilience: ResilienceOut }) {
   return (
     <Card className="mx-auto w-full max-w-xl">
       <CardHeader>
-        <CardDescription>{formatPeriod(overview.statement_period)}</CardDescription>
-        <CardTitle className="text-lg">Your monthly position</CardTitle>
-        <CardAction>
-          <ResultBadge resultCode={overview.result_code} />
-        </CardAction>
+        <CardTitle className="text-lg">Financial resilience</CardTitle>
+        {resilience.result_code && (
+          <CardAction>
+            <ResilienceBadge resultCode={resilience.result_code} />
+          </CardAction>
+        )}
       </CardHeader>
 
-      <CardContent className="space-y-6">
-        <div>
-          <StatBlock label="Monthly headroom" amount={overview.monthly_headroom} emphasize />
-          <div className="mt-4 grid grid-cols-2 gap-4">
-            <StatBlock label="Normalized monthly income" amount={overview.normalized_monthly_income} />
-            <StatBlock label="Normalized monthly outgoings" amount={overview.normalized_monthly_outgoings} />
-          </div>
-        </div>
+      <CardContent className="space-y-4">
+        {resilience.result_code === null ? (
+          <p className="text-sm text-muted-foreground">
+            Add accessible savings and a protected reserve to see how your savings compare. This does not affect
+            your monthly position above.
+          </p>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 gap-4">
+              {resilience.accessible_savings !== null && (
+                <StatBlock label="Accessible savings" amount={resilience.accessible_savings} />
+              )}
+              {resilience.protected_reserve !== null && (
+                <StatBlock label="Protected reserve" amount={resilience.protected_reserve} />
+              )}
+              {resilience.reserve_gap !== null && resilience.reserve_gap !== '0.00' && (
+                <StatBlock label="Reserve gap" amount={resilience.reserve_gap} />
+              )}
+              {resilience.savings_above_reserve !== null && resilience.savings_above_reserve !== '0.00' && (
+                <StatBlock label="Savings above reserve" amount={resilience.savings_above_reserve} />
+              )}
+              {resilience.current_account_balance !== null && (
+                <StatBlock label="Current-account balance" amount={resilience.current_account_balance} />
+              )}
+              {resilience.known_arrears !== null && (
+                <StatBlock label="Known arrears" amount={resilience.known_arrears} />
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Accessible savings are a separate resilience picture and never become monthly income or offset a
+              shortfall.
+            </p>
+          </>
+        )}
 
-        <p className="text-sm text-muted-foreground">
-          This reflects the information reported for this statement period. It is not a proof of long-term
-          affordability.
-        </p>
-
-        {overview.warnings.length > 0 && (
+        {resilience.warnings.length > 0 && resilience.result_code !== null && (
           <Alert>
             <Info />
             <AlertTitle>Limitations</AlertTitle>
             <AlertDescription>
               <ul>
-                {overview.warnings.map((warning) => (
+                {resilience.warnings.map((warning) => (
                   <li key={warning}>{warning}</li>
                 ))}
               </ul>
             </AlertDescription>
           </Alert>
         )}
-
-        <Separator />
-
-        <Accordion type="single" collapsible>
-          <AccordionItem value="calculation" className="border-none">
-            <AccordionTrigger>Review how this was calculated</AccordionTrigger>
-            <AccordionContent className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                Monthly headroom = normalized monthly income &minus; normalized monthly outgoings ={' '}
-                {formatGbp(overview.normalized_monthly_income)} &minus;{' '}
-                {formatGbp(overview.normalized_monthly_outgoings)} = {formatGbp(overview.monthly_headroom)}
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Calculation policy version: {overview.calculation_policy_version}
-              </p>
-              <EntryList title="Income" entries={overview.income_entries} />
-              <EntryList title="Outgoings" entries={overview.outgoing_entries} />
-            </AccordionContent>
-          </AccordionItem>
-        </Accordion>
       </CardContent>
     </Card>
+  )
+}
+
+function OverviewContent({ overview }: { overview: OverviewResponse }) {
+  return (
+    <div className="space-y-6">
+      <Card className="mx-auto w-full max-w-xl">
+        <CardHeader>
+          <CardDescription>{formatPeriod(overview.statement_period)}</CardDescription>
+          <CardTitle className="text-lg">Your monthly position</CardTitle>
+          <CardAction>
+            <ResultBadge resultCode={overview.result_code} />
+          </CardAction>
+        </CardHeader>
+
+        <CardContent className="space-y-6">
+          <div>
+            <StatBlock label="Monthly headroom" amount={overview.monthly_headroom} emphasize />
+            <div className="mt-4 grid grid-cols-2 gap-4">
+              <StatBlock label="Normalized monthly income" amount={overview.normalized_monthly_income} />
+              <StatBlock label="Normalized monthly outgoings" amount={overview.normalized_monthly_outgoings} />
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            This reflects the information reported for this statement period. It is not a proof of long-term
+            affordability.
+          </p>
+
+          {overview.warnings.length > 0 && (
+            <Alert>
+              <Info />
+              <AlertTitle>Limitations</AlertTitle>
+              <AlertDescription>
+                <ul>
+                  {overview.warnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <Separator />
+
+          <Accordion type="single" collapsible>
+            <AccordionItem value="calculation" className="border-none">
+              <AccordionTrigger>Review how this was calculated</AccordionTrigger>
+              <AccordionContent className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Monthly headroom = normalized monthly income &minus; normalized monthly outgoings ={' '}
+                  {formatGbp(overview.normalized_monthly_income)} &minus;{' '}
+                  {formatGbp(overview.normalized_monthly_outgoings)} = {formatGbp(overview.monthly_headroom)}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Calculation policy version: {overview.calculation_policy_version}
+                </p>
+                <EntryList title="Income" entries={overview.income_entries} />
+                <EntryList title="Outgoings" entries={overview.outgoing_entries} />
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        </CardContent>
+      </Card>
+
+      <ResilienceCard resilience={overview.resilience} />
+    </div>
   )
 }
 
@@ -190,7 +271,7 @@ export function Overview() {
       <Alert variant="destructive" className="mx-auto w-full max-w-xl">
         <AlertTriangle />
         <AlertTitle>We can&apos;t reach the server right now</AlertTitle>
-        <AlertDescription>Your information hasn&apos;t been lost &mdash; please try again in a moment.</AlertDescription>
+        <AlertDescription>Your information hasn&apos;t been lost - please try again in a moment.</AlertDescription>
       </Alert>
     )
   }

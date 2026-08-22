@@ -38,6 +38,19 @@ class ConfirmedSnapshot(Base):
     supersedes_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id"), nullable=True
     )
+
+    # Optional resilience information. Missing entirely (all NULL) when the
+    # customer did not provide it; current_account_balance may be negative
+    # (an overdraft) so it carries no non-negative check constraint.
+    current_account_balance: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    accessible_savings: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    protected_reserve: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    known_arrears: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    savings_above_reserve: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    reserve_gap: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    resilience_result_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    resilience_warnings: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     income_entries: Mapped[list["SnapshotIncomeEntry"]] = relationship(
@@ -50,6 +63,9 @@ class ConfirmedSnapshot(Base):
     __table_args__ = (
         CheckConstraint("normalized_monthly_income >= 0", name="ck_snapshot_income_non_negative"),
         CheckConstraint("normalized_monthly_outgoings >= 0", name="ck_snapshot_outgoings_non_negative"),
+        CheckConstraint("accessible_savings >= 0", name="ck_snapshot_accessible_savings_non_negative"),
+        CheckConstraint("protected_reserve >= 0", name="ck_snapshot_protected_reserve_non_negative"),
+        CheckConstraint("known_arrears >= 0", name="ck_snapshot_known_arrears_non_negative"),
     )
 
 

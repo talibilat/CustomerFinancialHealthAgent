@@ -8,6 +8,7 @@ from customer_financial_health_api.domain.financial_health import (
     Frequency,
     MoneyEntry,
     calculate_monthly_position,
+    calculate_resilience,
 )
 from customer_financial_health_api.persistence.models import Customer
 from customer_financial_health_api.persistence.repository import (
@@ -31,6 +32,15 @@ def seed_demo_data(session: Session) -> None:
     ]
     position = calculate_monthly_position(income_entries, outgoing_entries)
 
+    # Deliberately a mixed picture: positive monthly headroom, but accessible
+    # savings sit below the customer's protected reserve, and the current
+    # account is slightly overdrawn.
+    resilience = calculate_resilience(
+        accessible_savings=Decimal("300.00"),
+        protected_reserve=Decimal("1000.00"),
+        current_account_balance=Decimal("-45.30"),
+    )
+
     save_confirmed_snapshot(
         session,
         customer_id=customer.id,
@@ -39,4 +49,5 @@ def seed_demo_data(session: Session) -> None:
         position=position,
         income_entries=income_entries,
         outgoing_entries=outgoing_entries,
+        resilience=resilience,
     )

@@ -10,8 +10,9 @@ Azure OpenAI is limited to unconfirmed outgoing-classification suggestions and o
 
 Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration have been prepared.
 The first tracer-bullet slice is implemented and verified: Docker Compose starts the frontend, backend, PostgreSQL, and a one-shot migration-and-seed step, and the browser overview shows a seeded fictional customer's normalized monthly income, outgoings, and headroom calculated by the deterministic financial-health module.
+Financial resilience is also implemented: the overview separately shows accessible savings, protected reserve, current-account balance, and known arrears, with a below/at/above-reserve result that never changes the monthly cash-flow figures above it.
 The frontend uses Tailwind CSS and shadcn/ui components.
-Later journey steps below (classification, snapshots, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
+Later journey steps below (update flow, classification, snapshots, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
 
 ## Quick start
 
@@ -66,14 +67,15 @@ cd ../frontend && npm run generate-client
 
 1. **Done.** Start the frontend, backend, PostgreSQL, and migrations with Docker Compose.
 2. **Done.** Open the seeded customer's financial-health overview, showing normalized monthly income, outgoings, and headroom with the calculation formula, original amounts and frequencies, and calculation-policy version.
-3. Planned: review resilience and historical change.
-4. Planned: add a known outgoing and observe deterministic classification.
-5. Planned: add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
-6. Planned: preview and confirm a new immutable snapshot.
-7. Planned: inspect the updated history and deterministic change explanation.
-8. Planned: explore and save a repayment scenario without modifying the statement.
-9. Planned: request an optional personalized explanation.
-10. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
+3. **Done.** Review financial resilience separately from monthly cash flow: accessible savings, protected reserve, current-account balance, known arrears, and a below/at/above-reserve result that never changes the monthly headroom above it.
+4. Planned: review historical change.
+5. Planned: add a known outgoing and observe deterministic classification.
+6. Planned: add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
+7. Planned: preview and confirm a new immutable snapshot.
+8. Planned: inspect the updated history and deterministic change explanation.
+9. Planned: explore and save a repayment scenario without modifying the statement.
+10. Planned: request an optional personalized explanation.
+11. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 

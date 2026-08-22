@@ -5,6 +5,7 @@ from customer_financial_health_api.domain.financial_health import (
     Frequency,
     MoneyEntry,
     calculate_monthly_position,
+    calculate_resilience,
 )
 from customer_financial_health_api.persistence.repository import (
     create_customer,
@@ -29,6 +30,7 @@ def test_saved_snapshot_can_be_read_back_with_exact_decimal_precision(db_session
         position=position,
         income_entries=income_entries,
         outgoing_entries=outgoing_entries,
+        resilience=calculate_resilience(),
     )
     db_session.commit()
 
