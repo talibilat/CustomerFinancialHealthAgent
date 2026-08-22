@@ -317,3 +317,60 @@ describe('StatementEditor', () => {
     expect(screen.getByText('looking_ahead_info_missing')).toBeInTheDocument()
   })
 })
+
+describe('StatementEditor expected changes', () => {
+  function withExpectedChange() {
+    const response = statementResponse()
+    response.statement.looking_ahead.expected_changes = [
+      {
+        entry_id: 'e1',
+        description: 'Shift reduction',
+        kind: 'income_decrease',
+        original_amount: '200.00',
+        original_frequency: 'monthly',
+        normalized_monthly_amount: '200.00',
+      },
+    ] as never
+    return response
+  }
+
+  it('shows a reported expected change with the kind the customer chose', async () => {
+    retrieve.mockResolvedValue(ok(withExpectedChange()))
+
+    renderEditor()
+
+    expect(await screen.findByRole('textbox', { name: /shift reduction amount/i })).toHaveValue('200.00')
+    expect(screen.getByRole('combobox', { name: /shift reduction kind/i })).toHaveValue('income_decrease')
+  })
+
+  it('never discards a stored expected change when the statement is saved', async () => {
+    retrieve.mockResolvedValue(ok(withExpectedChange()))
+    update.mockResolvedValue(ok(withExpectedChange()))
+
+    renderEditor()
+    await screen.findByRole('textbox', { name: /shift reduction amount/i })
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    const body = update.mock.calls[0][0].body as {
+      looking_ahead: { expected_changes: { description: string; kind: string; amount: string }[] }
+    }
+    expect(body.looking_ahead.expected_changes).toEqual([
+      expect.objectContaining({
+        description: 'Shift reduction',
+        kind: 'income_decrease',
+        amount: '200.00',
+      }),
+    ])
+  })
+
+  it('adds and removes an expected change', async () => {
+    renderEditor()
+    await screen.findByRole('textbox', { name: /wages amount/i })
+
+    await userEvent.click(screen.getByRole('button', { name: /add an expected change/i }))
+    expect(screen.getAllByRole('group', { name: /expected change/i })).toHaveLength(1)
+
+    await userEvent.click(screen.getByRole('button', { name: /remove new entry/i }))
+    expect(screen.queryByRole('group', { name: /expected change/i })).not.toBeInTheDocument()
+  })
+})

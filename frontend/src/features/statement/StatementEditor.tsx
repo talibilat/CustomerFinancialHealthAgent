@@ -37,14 +37,24 @@ type ResilienceDraft = {
   known_arrears: string
 }
 
+type ChangeDraft = EntryDraft & { kind: string }
+
 type Draft = {
   income: EntryDraft[]
   outgoings: EntryDraft[]
   commitments: EntryDraft[]
   irregularCosts: EntryDraft[]
   futureProvisions: EntryDraft[]
+  expectedChanges: ChangeDraft[]
   resilience: ResilienceDraft
 }
+
+const EXPECTED_CHANGE_KINDS = [
+  { value: 'income_increase', label: 'Income going up' },
+  { value: 'income_decrease', label: 'Income going down' },
+  { value: 'expenditure_increase', label: 'A cost going up' },
+  { value: 'expenditure_decrease', label: 'A cost going down' },
+] as const
 
 /** Field paths use dots; DOM ids cannot, so the two are kept in step here. */
 function domId(fieldPath: string): string {
@@ -79,6 +89,10 @@ function toDraft(response: EditableStatementResponse): Draft {
     commitments: statement.repayment_commitments.map(toDraftEntry),
     irregularCosts: statement.looking_ahead.irregular_costs.map(toDraftEntry),
     futureProvisions: statement.looking_ahead.protected_future_provisions.map(toDraftEntry),
+    expectedChanges: statement.looking_ahead.expected_changes.map((change) => ({
+      ...toDraftEntry(change),
+      kind: change.kind,
+    })),
     resilience: {
       accessible_savings: statement.resilience.accessible_savings ?? '',
       protected_reserve: statement.resilience.protected_reserve ?? '',
@@ -118,7 +132,13 @@ function toSubmission(draft: Draft, statementPeriod: string) {
     looking_ahead: {
       irregular_costs: toSubmittedEntries(draft.irregularCosts),
       protected_future_provisions: toSubmittedEntries(draft.futureProvisions),
-      expected_changes: [],
+      expected_changes: draft.expectedChanges.map((change) => ({
+        entry_id: change.entryId,
+        description: change.description,
+        kind: change.kind,
+        amount: change.amount,
+        frequency: change.frequency,
+      })),
     },
   }
 }
@@ -272,6 +292,92 @@ function EntrySection({
       <Button type="button" variant="outline" onClick={() => onChange([...entries, blankEntry()])}>
         <Plus aria-hidden="true" />
         {addLabel}
+      </Button>
+    </section>
+  )
+}
+
+function ExpectedChangeSection({
+  entries,
+  errors,
+  onChange,
+}: {
+  entries: ChangeDraft[]
+  errors: FieldError[]
+  onChange: (next: ChangeDraft[]) => void
+}) {
+  const fieldPrefix = 'looking_ahead.expected_changes'
+
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="font-medium">Expected changes</h3>
+        <p className="text-sm text-muted-foreground">
+          Optional. Something you already know is changing soon. This is recorded for context and
+          does not change the position for this statement period.
+        </p>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nothing reported yet.</p>
+      ) : (
+        entries.map((change, index) => {
+          const label = change.description || 'New entry'
+          const path = (field: string) => `${fieldPrefix}.${index}.${field}`
+          const kindError = errorFor(errors, path('kind'))
+          const replace = (next: ChangeDraft) => onChange(entries.map((c, i) => (i === index ? next : c)))
+
+          return (
+            <div
+              key={change.entryId}
+              role="group"
+              aria-label={`Expected change: ${label}`}
+              className="space-y-3 rounded-lg border p-3"
+            >
+              <div>
+                <label className="text-sm text-muted-foreground" htmlFor={domId(path('kind'))}>
+                  What is changing
+                </label>
+                <select
+                  id={domId(path('kind'))}
+                  aria-label={`${label} kind`}
+                  aria-invalid={kindError ? true : undefined}
+                  className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
+                  value={change.kind}
+                  onChange={(event) => replace({ ...change, kind: event.target.value })}
+                >
+                  {EXPECTED_CHANGE_KINDS.map((kind) => (
+                    <option key={kind.value} value={kind.value}>
+                      {kind.label}
+                    </option>
+                  ))}
+                </select>
+                <FieldMessage error={kindError} />
+              </div>
+
+              <EntryRow
+                noun="Change detail"
+                fieldPrefix={fieldPrefix}
+                index={index}
+                entry={change}
+                errors={errors}
+                onChange={(next) => replace({ ...next, kind: change.kind })}
+                onRemove={() => onChange(entries.filter((_, i) => i !== index))}
+              />
+            </div>
+          )
+        })
+      )}
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() =>
+          onChange([...entries, { ...blankEntry(), kind: EXPECTED_CHANGE_KINDS[0].value }])
+        }
+      >
+        <Plus aria-hidden="true" />
+        Add an expected change
       </Button>
     </section>
   )
@@ -662,6 +768,14 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             entries={draft.futureProvisions}
             errors={errors}
             onChange={(futureProvisions) => update({ futureProvisions })}
+          />
+
+          <Separator />
+
+          <ExpectedChangeSection
+            entries={draft.expectedChanges}
+            errors={errors}
+            onChange={(expectedChanges) => update({ expectedChanges })}
           />
 
           <Separator />
