@@ -2,7 +2,17 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, String, func
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -66,6 +76,107 @@ class ConfirmedSnapshot(Base):
         CheckConstraint("accessible_savings >= 0", name="ck_snapshot_accessible_savings_non_negative"),
         CheckConstraint("protected_reserve >= 0", name="ck_snapshot_protected_reserve_non_negative"),
         CheckConstraint("known_arrears >= 0", name="ck_snapshot_known_arrears_non_negative"),
+    )
+
+
+class EditableFinancialStatement(Base):
+    """The customer's current editable statement for one statement period.
+
+    This is mutable working state, deliberately separate from the immutable
+    confirmed snapshots. ``version`` advances on every save so a submission
+    built from stale data can be refused instead of silently overwriting a
+    newer edit.
+    """
+
+    __tablename__ = "editable_financial_statements"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    statement_period: Mapped[date] = mapped_column(Date, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    currency: Mapped[str] = mapped_column(String, nullable=False, default="GBP")
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # Optional resilience information. current_account_balance may be negative
+    # (an overdraft), so it carries no non-negative check constraint.
+    current_account_balance: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    accessible_savings: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    protected_reserve: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    known_arrears: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+
+    entries: Mapped[list["EditableStatementEntry"]] = relationship(
+        back_populates="statement",
+        cascade="all, delete-orphan",
+        order_by="EditableStatementEntry.sort_order",
+    )
+    expected_changes: Mapped[list["EditableStatementExpectedChange"]] = relationship(
+        back_populates="statement",
+        cascade="all, delete-orphan",
+        order_by="EditableStatementExpectedChange.sort_order",
+    )
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "statement_period", name="uq_editable_statement_customer_period"),
+        CheckConstraint("version >= 1", name="ck_editable_statement_version_positive"),
+        CheckConstraint("accessible_savings >= 0", name="ck_editable_accessible_savings_non_negative"),
+        CheckConstraint("protected_reserve >= 0", name="ck_editable_protected_reserve_non_negative"),
+        CheckConstraint("known_arrears >= 0", name="ck_editable_known_arrears_non_negative"),
+    )
+
+
+class EditableStatementEntry(Base):
+    """One reported line of an editable statement, tagged by which section it belongs to."""
+
+    __tablename__ = "editable_statement_entries"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    statement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("editable_financial_statements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    section: Mapped[str] = mapped_column(String, nullable=False)
+    entry_key: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False)
+    original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    original_frequency: Mapped[str] = mapped_column(String, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    statement: Mapped["EditableFinancialStatement"] = relationship(back_populates="entries")
+
+    __table_args__ = (
+        CheckConstraint("original_amount >= 0", name="ck_editable_entry_amount_non_negative"),
+    )
+
+
+class EditableStatementExpectedChange(Base):
+    """A change the customer expects in a future period. It never alters this period."""
+
+    __tablename__ = "editable_statement_expected_changes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    statement_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("editable_financial_statements.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    entry_key: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    original_frequency: Mapped[str] = mapped_column(String, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    statement: Mapped["EditableFinancialStatement"] = relationship(back_populates="expected_changes")
+
+    __table_args__ = (
+        CheckConstraint("original_amount >= 0", name="ck_editable_change_amount_non_negative"),
     )
 
 
