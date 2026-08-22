@@ -14,25 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const gbpFormatter = new Intl.NumberFormat('en-GB', {
-  style: 'currency',
-  currency: 'GBP',
-})
-
-const periodFormatter = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' })
-
-function formatGbp(amount: string): string {
-  return gbpFormatter.format(Number(amount))
-}
-
-function formatFrequency(frequency: string): string {
-  return frequency.replace('_', '-')
-}
-
-function formatPeriod(statementPeriod: string): string {
-  return periodFormatter.format(new Date(`${statementPeriod}T00:00:00Z`))
-}
+import { formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
 
 const RESULT_PRESENTATION: Record<
   string,

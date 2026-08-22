@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses } from './types.gen';
+import type { GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -32,3 +32,32 @@ export const readinessHealthReadyGet = <ThrowOnError extends boolean = false>(op
  * Get Overview
  */
 export const getOverviewOverviewGet = <ThrowOnError extends boolean = false>(options?: Options<GetOverviewOverviewGetData, ThrowOnError>): RequestResult<GetOverviewOverviewGetResponses, unknown, ThrowOnError> => (options?.client ?? client).get<GetOverviewOverviewGetResponses, unknown, ThrowOnError>({ url: '/overview', ...options });
+
+/**
+ * Retrieve Financial Statement
+ */
+export const retrieveFinancialStatementFinancialStatementGet = <ThrowOnError extends boolean = false>(options: Options<RetrieveFinancialStatementFinancialStatementGetData, ThrowOnError>): RequestResult<RetrieveFinancialStatementFinancialStatementGetResponses, RetrieveFinancialStatementFinancialStatementGetErrors, ThrowOnError> => (options.client ?? client).get<RetrieveFinancialStatementFinancialStatementGetResponses, RetrieveFinancialStatementFinancialStatementGetErrors, ThrowOnError>({ url: '/financial-statement', ...options });
+
+/**
+ * Update Financial Statement
+ */
+export const updateFinancialStatementFinancialStatementPut = <ThrowOnError extends boolean = false>(options: Options<UpdateFinancialStatementFinancialStatementPutData, ThrowOnError>): RequestResult<UpdateFinancialStatementFinancialStatementPutResponses, UpdateFinancialStatementFinancialStatementPutErrors, ThrowOnError> => (options.client ?? client).put<UpdateFinancialStatementFinancialStatementPutResponses, UpdateFinancialStatementFinancialStatementPutErrors, ThrowOnError>({
+    url: '/financial-statement',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Preview Financial Statement
+ */
+export const previewFinancialStatementFinancialStatementPreviewPost = <ThrowOnError extends boolean = false>(options: Options<PreviewFinancialStatementFinancialStatementPreviewPostData, ThrowOnError>): RequestResult<PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewFinancialStatementFinancialStatementPreviewPostErrors, ThrowOnError> => (options.client ?? client).post<PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewFinancialStatementFinancialStatementPreviewPostErrors, ThrowOnError>({
+    url: '/financial-statement/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
