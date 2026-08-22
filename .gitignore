@@ -1,0 +1,37 @@
+# Local agent harness
+AGENTS.md
+.agents/
+skills-lock.json
+
+# Secrets and local configuration
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+
+# Python
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.py[cod]
+
+# Node
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Local data and temporary output
+tmp/
+*.log
+.DS_Store
+
+# The supplied brief is local task input rather than submission source.
+Ophelos_Engineering_Take-Home_Task.pdf
