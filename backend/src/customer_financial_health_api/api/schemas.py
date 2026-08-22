@@ -11,6 +11,19 @@ class MoneyEntryOut(BaseModel):
     normalized_monthly_amount: str
 
 
+class ResilienceOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    accessible_savings: str | None
+    protected_reserve: str | None
+    current_account_balance: str | None
+    known_arrears: str | None
+    savings_above_reserve: str | None
+    reserve_gap: str | None
+    result_code: str | None
+    warnings: list[str]
+
+
 class OverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -25,3 +38,4 @@ class OverviewResponse(BaseModel):
     warnings: list[str]
     income_entries: list[MoneyEntryOut]
     outgoing_entries: list[MoneyEntryOut]
+    resilience: ResilienceOut

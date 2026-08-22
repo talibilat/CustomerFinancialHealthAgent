@@ -12,6 +12,8 @@ from customer_financial_health_api.domain.financial_health import (
     Frequency,
     MoneyEntry,
     MonthlyPositionResult,
+    ResilienceResult,
+    ResilienceResultCode,
     normalize_to_monthly,
 )
 from customer_financial_health_api.persistence.models import (
@@ -43,6 +45,7 @@ class ConfirmedSnapshotView:
     warnings: tuple[str, ...]
     income_entries: tuple[SnapshotEntryView, ...]
     outgoing_entries: tuple[SnapshotEntryView, ...]
+    resilience: ResilienceResult
 
 
 def create_customer(session: Session) -> Customer:
@@ -78,6 +81,7 @@ def save_confirmed_snapshot(
     position: MonthlyPositionResult,
     income_entries: Sequence[MoneyEntry],
     outgoing_entries: Sequence[MoneyEntry],
+    resilience: ResilienceResult,
     supersedes_snapshot_id: uuid.UUID | None = None,
 ) -> ConfirmedSnapshot:
     income_normalized = [normalize_to_monthly(e.amount, e.frequency) for e in income_entries]
@@ -96,6 +100,14 @@ def save_confirmed_snapshot(
         supersedes_snapshot_id=supersedes_snapshot_id,
         income_entries=_entry_rows(income_entries, income_normalized, SnapshotIncomeEntry),
         outgoing_entries=_entry_rows(outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry),
+        current_account_balance=resilience.current_account_balance,
+        accessible_savings=resilience.accessible_savings,
+        protected_reserve=resilience.protected_reserve,
+        known_arrears=resilience.known_arrears,
+        savings_above_reserve=resilience.savings_above_reserve,
+        reserve_gap=resilience.reserve_gap,
+        resilience_result_code=resilience.result_code.value if resilience.result_code else None,
+        resilience_warnings=list(resilience.warnings),
     )
     session.add(snapshot)
     session.flush()
@@ -129,6 +141,18 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                 normalized_monthly_amount=e.normalized_monthly_amount,
             )
             for e in snapshot.outgoing_entries
+        ),
+        resilience=ResilienceResult(
+            accessible_savings=snapshot.accessible_savings,
+            protected_reserve=snapshot.protected_reserve,
+            current_account_balance=snapshot.current_account_balance,
+            known_arrears=snapshot.known_arrears,
+            savings_above_reserve=snapshot.savings_above_reserve,
+            reserve_gap=snapshot.reserve_gap,
+            result_code=ResilienceResultCode(snapshot.resilience_result_code)
+            if snapshot.resilience_result_code
+            else None,
+            warnings=tuple(snapshot.resilience_warnings),
         ),
     )
 

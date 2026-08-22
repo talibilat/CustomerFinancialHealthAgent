@@ -96,3 +96,68 @@ def calculate_monthly_position(
         result_code=_result_code_for(headroom),
         warnings=tuple(warnings),
     )
+
+
+class ResilienceResultCode(str, Enum):
+    BELOW_RESERVE = "below_reserve"
+    AT_RESERVE = "at_reserve"
+    ABOVE_RESERVE = "above_reserve"
+
+
+@dataclass(frozen=True)
+class ResilienceResult:
+    accessible_savings: Decimal | None
+    protected_reserve: Decimal | None
+    current_account_balance: Decimal | None
+    known_arrears: Decimal | None
+    savings_above_reserve: Decimal | None
+    reserve_gap: Decimal | None
+    result_code: ResilienceResultCode | None
+    warnings: tuple[str, ...]
+
+
+def calculate_resilience(
+    accessible_savings: Decimal | None = None,
+    protected_reserve: Decimal | None = None,
+    current_account_balance: Decimal | None = None,
+    known_arrears: Decimal | None = None,
+) -> ResilienceResult:
+    if accessible_savings is not None and accessible_savings < 0:
+        raise ValueError(f"accessible savings must not be negative: {accessible_savings}")
+    if protected_reserve is not None and protected_reserve < 0:
+        raise ValueError(f"protected reserve must not be negative: {protected_reserve}")
+    if known_arrears is not None and known_arrears < 0:
+        raise ValueError(f"known arrears must not be negative: {known_arrears}")
+
+    if accessible_savings is None or protected_reserve is None:
+        return ResilienceResult(
+            accessible_savings=accessible_savings,
+            protected_reserve=protected_reserve,
+            current_account_balance=current_account_balance,
+            known_arrears=known_arrears,
+            savings_above_reserve=None,
+            reserve_gap=None,
+            result_code=None,
+            warnings=("resilience_info_missing",),
+        )
+
+    savings_above_reserve = max(Decimal("0.00"), accessible_savings - protected_reserve)
+    reserve_gap = max(Decimal("0.00"), protected_reserve - accessible_savings)
+
+    if accessible_savings < protected_reserve:
+        result_code = ResilienceResultCode.BELOW_RESERVE
+    elif accessible_savings == protected_reserve:
+        result_code = ResilienceResultCode.AT_RESERVE
+    else:
+        result_code = ResilienceResultCode.ABOVE_RESERVE
+
+    return ResilienceResult(
+        accessible_savings=accessible_savings,
+        protected_reserve=protected_reserve,
+        current_account_balance=current_account_balance,
+        known_arrears=known_arrears,
+        savings_above_reserve=savings_above_reserve,
+        reserve_gap=reserve_gap,
+        result_code=result_code,
+        warnings=(),
+    )

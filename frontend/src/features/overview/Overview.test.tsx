@@ -21,6 +21,19 @@ function renderWithQueryClient() {
   )
 }
 
+function emptyResilience() {
+  return {
+    accessible_savings: null,
+    protected_reserve: null,
+    current_account_balance: null,
+    known_arrears: null,
+    savings_above_reserve: null,
+    reserve_gap: null,
+    result_code: null,
+    warnings: ['resilience_info_missing'],
+  }
+}
+
 const mockedGetOverview = vi.mocked(getOverviewOverviewGet)
 
 beforeEach(() => {
@@ -67,6 +80,7 @@ describe('Overview', () => {
         outgoing_entries: [
           { original_amount: '950.00', original_frequency: 'monthly', normalized_monthly_amount: '950.00' },
         ],
+        resilience: emptyResilience(),
       },
       error: undefined,
       request: new Request('http://localhost/overview'),
@@ -98,6 +112,7 @@ describe('Overview', () => {
         warnings: [],
         income_entries: [],
         outgoing_entries: [],
+        resilience: emptyResilience(),
       },
       error: undefined,
       request: new Request('http://localhost/overview'),
@@ -113,5 +128,76 @@ describe('Overview', () => {
     expect(bodyText).not.toMatch(/\bhealthy\b/i)
     expect(bodyText).not.toMatch(/\bapproved\b/i)
     expect(bodyText).toMatch(/not a proof of long-term affordability/i)
+  })
+
+  it('shows resilience below the protected reserve without changing the displayed headroom', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1518.75',
+        monthly_headroom: '931.25',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: {
+          accessible_savings: '300.00',
+          protected_reserve: '1000.00',
+          current_account_balance: '-45.30',
+          known_arrears: null,
+          savings_above_reserve: '0.00',
+          reserve_gap: '700.00',
+          result_code: 'below_reserve',
+          warnings: [],
+        },
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText('£931.25')).toBeInTheDocument()
+    expect(screen.getByText('£300.00')).toBeInTheDocument()
+    expect(screen.getByText('£1,000.00')).toBeInTheDocument()
+    expect(screen.getByText('-£45.30')).toBeInTheDocument()
+    expect(screen.getByText('£700.00')).toBeInTheDocument()
+    expect(screen.getByText(/below.*protected reserve/i)).toBeInTheDocument()
+
+    const bodyText = document.body.textContent ?? ''
+    expect(bodyText).not.toMatch(/net worth/i)
+    expect(bodyText).not.toMatch(/excess cash/i)
+  })
+
+  it('shows a limitation instead of blocking when resilience information is missing', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '1000.00',
+        normalized_monthly_outgoings: '200.00',
+        monthly_headroom: '800.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: emptyResilience(),
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText('£800.00')).toBeInTheDocument()
+    expect(screen.getByText(/resilience_info_missing|add.*savings|no resilience/i)).toBeInTheDocument()
   })
 })

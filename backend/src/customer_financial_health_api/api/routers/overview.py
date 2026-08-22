@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.dependencies import get_db
-from customer_financial_health_api.api.schemas import MoneyEntryOut, OverviewResponse
+from customer_financial_health_api.api.schemas import MoneyEntryOut, OverviewResponse, ResilienceOut
+from customer_financial_health_api.domain.financial_health import ResilienceResult
 from customer_financial_health_api.persistence.repository import (
     ConfirmedSnapshotView,
     get_demo_customer,
@@ -23,6 +24,23 @@ def _entries_out(entries) -> list[MoneyEntryOut]:
     ]
 
 
+def _optional_str(amount) -> str | None:
+    return str(amount) if amount is not None else None
+
+
+def _resilience_out(resilience: ResilienceResult) -> ResilienceOut:
+    return ResilienceOut(
+        accessible_savings=_optional_str(resilience.accessible_savings),
+        protected_reserve=_optional_str(resilience.protected_reserve),
+        current_account_balance=_optional_str(resilience.current_account_balance),
+        known_arrears=_optional_str(resilience.known_arrears),
+        savings_above_reserve=_optional_str(resilience.savings_above_reserve),
+        reserve_gap=_optional_str(resilience.reserve_gap),
+        result_code=resilience.result_code.value if resilience.result_code else None,
+        warnings=list(resilience.warnings),
+    )
+
+
 def _to_response(customer_id, snapshot: ConfirmedSnapshotView) -> OverviewResponse:
     return OverviewResponse(
         customer_id=str(customer_id),
@@ -36,6 +54,7 @@ def _to_response(customer_id, snapshot: ConfirmedSnapshotView) -> OverviewRespon
         warnings=list(snapshot.warnings),
         income_entries=_entries_out(snapshot.income_entries),
         outgoing_entries=_entries_out(snapshot.outgoing_entries),
+        resilience=_resilience_out(snapshot.resilience),
     )
 
 

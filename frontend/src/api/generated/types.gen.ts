@@ -70,6 +70,45 @@ export type OverviewResponse = {
      * Outgoing Entries
      */
     outgoing_entries: Array<MoneyEntryOut>;
+    resilience: ResilienceOut;
+};
+
+/**
+ * ResilienceOut
+ */
+export type ResilienceOut = {
+    /**
+     * Accessible Savings
+     */
+    accessible_savings: string | null;
+    /**
+     * Protected Reserve
+     */
+    protected_reserve: string | null;
+    /**
+     * Current Account Balance
+     */
+    current_account_balance: string | null;
+    /**
+     * Known Arrears
+     */
+    known_arrears: string | null;
+    /**
+     * Savings Above Reserve
+     */
+    savings_above_reserve: string | null;
+    /**
+     * Reserve Gap
+     */
+    reserve_gap: string | null;
+    /**
+     * Result Code
+     */
+    result_code: string | null;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
 };
 
 export type LivenessHealthLiveGetData = {
