@@ -1,6 +1,6 @@
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { StatementEditor } from './StatementEditor'
@@ -108,6 +108,18 @@ describe('StatementEditor', () => {
     expect(within(food).getByText(/£520\.00 per month/i)).toBeInTheDocument()
   })
 
+  it('never pairs an edited amount with a stale normalized monthly value', async () => {
+    renderEditor()
+
+    const rent = await amountField(/rent amount/i)
+    await userEvent.clear(rent)
+    await userEvent.type(rent, '1200.00')
+
+    const rentGroup = screen.getByRole('group', { name: /outgoing: rent/i })
+    expect(within(rentGroup).queryByText(/normalizes to/i)).not.toBeInTheDocument()
+    expect(within(rentGroup).queryByText(/£950\.00 per month/i)).not.toBeInTheDocument()
+  })
+
   it('previews the recalculated position and states that nothing was saved', async () => {
     preview.mockResolvedValue(
       ok({
@@ -146,6 +158,67 @@ describe('StatementEditor', () => {
       screen.getByText(/nothing has been saved and your confirmed history has not changed/i),
     ).toBeInTheDocument()
     expect(update).not.toHaveBeenCalled()
+  })
+
+  it('clears a preview as soon as the draft changes', async () => {
+    preview.mockResolvedValue(
+      ok({
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '3000.00',
+        normalized_monthly_outgoings: '1470.00',
+        monthly_headroom: '1530.00',
+        result_code: 'surplus',
+        warnings: [],
+        normalized_monthly_repayment_commitments: '0.00',
+        normalized_monthly_irregular_costs: '0.00',
+        normalized_monthly_protected_future_provisions: '0.00',
+        expected_changes: [],
+        resilience: {
+          accessible_savings: '300.00',
+          protected_reserve: '1000.00',
+          current_account_balance: '-45.30',
+          known_arrears: null,
+          savings_above_reserve: '0.00',
+          reserve_gap: '700.00',
+          result_code: 'below_reserve',
+          warnings: [],
+        },
+      }),
+    )
+
+    renderEditor()
+    const wages = await amountField(/wages amount/i)
+    await userEvent.click(screen.getByRole('button', { name: /preview/i }))
+    expect(await screen.findByText('£1,530.00')).toBeInTheDocument()
+
+    await userEvent.clear(wages)
+    await userEvent.type(wages, '3100.00')
+
+    expect(screen.queryByText('£1,530.00')).not.toBeInTheDocument()
+    expect(screen.queryByText(/your position if you save this/i)).not.toBeInTheDocument()
+  })
+
+  it('preserves unsaved edits when the window regains focus', async () => {
+    renderEditor()
+    const wages = await amountField(/wages amount/i)
+    await userEvent.clear(wages)
+    await userEvent.type(wages, '3000.00')
+
+    retrieve.mockResolvedValue(
+      ok(
+        statementResponse({
+          income_entries: [entry('i1', 'Wages', '999.00', 'monthly', '999.00')],
+        }),
+      ),
+    )
+
+    focusManager.setFocused(false)
+    focusManager.setFocused(true)
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(screen.getByRole('textbox', { name: /wages amount/i })).toHaveValue('3000.00')
+    expect(retrieve).toHaveBeenCalledTimes(1)
+    focusManager.setFocused(undefined)
   })
 
   it('adds and removes a reported outgoing', async () => {
@@ -207,6 +280,57 @@ describe('StatementEditor', () => {
     const target = document.querySelector(link.getAttribute('href') as string)
 
     expect(target).toBe(screen.getByRole('textbox', { name: /wages amount/i }))
+    expect(target).toHaveAttribute('aria-describedby', 'field-income_entries-i1-amount-error')
+  })
+
+  it('keeps an entry error attached to that entry after an earlier row is removed', async () => {
+    update.mockResolvedValue(
+      failure(422, {
+        code: 'statement_invalid',
+        message: 'Nothing was saved.',
+        errors: [
+          {
+            field: 'outgoing_entries.1.amount',
+            code: 'amount_invalid',
+            message: 'Enter a valid food amount.',
+          },
+        ],
+      }),
+    )
+
+    renderEditor()
+    await amountField(/rent amount/i)
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await screen.findByRole('link', { name: /enter a valid food amount/i })
+
+    await userEvent.click(screen.getByRole('button', { name: /remove rent/i }))
+
+    const foodAmount = screen.getByRole('textbox', { name: /food and housekeeping amount/i })
+    const link = screen.getByRole('link', { name: /enter a valid food amount/i })
+    expect(document.querySelector(link.getAttribute('href') as string)).toBe(foodAmount)
+    expect(foodAmount).toHaveAccessibleDescription(/enter a valid food amount/i)
+  })
+
+  it('renders FastAPI generated validation details as actionable field errors', async () => {
+    update.mockResolvedValue(
+      failure(422, [
+        {
+          type: 'decimal_parsing',
+          loc: ['body', 'income_entries', 0, 'amount'],
+          msg: 'Input should be a valid decimal.',
+          input: 'not-money',
+        },
+      ]),
+    )
+
+    renderEditor()
+    await amountField(/wages amount/i)
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    const link = await screen.findByRole('link', { name: /input should be a valid decimal/i })
+    expect(document.querySelector(link.getAttribute('href') as string)).toBe(
+      screen.getByRole('textbox', { name: /wages amount/i }),
+    )
   })
 
   it('offers a safe refresh when the statement was changed elsewhere', async () => {

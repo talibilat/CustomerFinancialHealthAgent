@@ -244,7 +244,7 @@ def save_editable_statement(
     stmt = select(EditableFinancialStatement).where(
         EditableFinancialStatement.customer_id == customer_id,
         EditableFinancialStatement.statement_period == statement.statement_period,
-    )
+    ).with_for_update()
     stored = session.execute(stmt).scalar_one_or_none()
 
     if stored is None:

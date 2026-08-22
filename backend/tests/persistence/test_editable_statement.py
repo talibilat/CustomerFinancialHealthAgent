@@ -1,7 +1,11 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+from time import monotonic, sleep
 
 import pytest
+from sqlalchemy.orm import Session
 
 from customer_financial_health_api.domain.financial_health import (
     Frequency,
@@ -98,6 +102,59 @@ def test_saving_against_a_stale_version_is_refused_and_changes_nothing(db_sessio
     stored = get_editable_statement(db_session, customer_id=customer.id, statement_period=PERIOD)
     assert stored.version == 1
     assert stored.statement.income_entries[0].amount == Decimal("2450.55")
+
+
+def test_concurrent_saves_cannot_both_overwrite_the_same_version(engine, db_session):
+    customer = create_customer(db_session)
+    customer_id = customer.id
+    save_editable_statement(
+        db_session, customer_id=customer_id, statement=validate_statement(payload()), expected_version=None
+    )
+    db_session.commit()
+
+    first_session = Session(engine)
+    second_started = Event()
+
+    try:
+        first = payload()
+        first["income_entries"][0]["amount"] = "3000.00"
+        save_editable_statement(
+            first_session,
+            customer_id=customer_id,
+            statement=validate_statement(first),
+            expected_version=1,
+        )
+
+        def attempt_second_save():
+            with Session(engine) as second_session:
+                second = payload()
+                second["income_entries"][0]["amount"] = "4000.00"
+                second_started.set()
+                try:
+                    save_editable_statement(
+                        second_session,
+                        customer_id=customer_id,
+                        statement=validate_statement(second),
+                        expected_version=1,
+                    )
+                    second_session.commit()
+                    return "saved"
+                except StaleStatementVersion:
+                    second_session.rollback()
+                    return "stale"
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            second_result = pool.submit(attempt_second_save)
+            assert second_started.wait(timeout=1)
+
+            deadline = monotonic() + 1
+            while not second_result.done() and monotonic() < deadline:
+                sleep(0.01)
+
+            first_session.commit()
+            assert second_result.result(timeout=2) == "stale"
+    finally:
+        first_session.close()
 
 
 def test_editable_statement_is_scoped_to_its_owning_customer(db_session):

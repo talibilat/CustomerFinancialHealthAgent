@@ -45,8 +45,22 @@ Frontend component tests:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run test
+```
+
+The Playwright journey starts or reuses the Docker Compose application and verifies the connected statement preview plus the 375px layout:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+The suite reuses an already-running stack rather than rebuilding it, so rebuild the frontend image after changing frontend code or the run will test the previous build:
+
+```bash
+docker compose up --build -d frontend
 ```
 
 To regenerate the TypeScript client after a backend API change:

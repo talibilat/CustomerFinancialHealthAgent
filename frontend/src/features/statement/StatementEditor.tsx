@@ -49,6 +49,14 @@ type Draft = {
   resilience: ResilienceDraft
 }
 
+type EntryCollection =
+  | 'income_entries'
+  | 'outgoing_entries'
+  | 'repayment_commitments'
+  | 'looking_ahead.irregular_costs'
+  | 'looking_ahead.protected_future_provisions'
+  | 'looking_ahead.expected_changes'
+
 const EXPECTED_CHANGE_KINDS = [
   { value: 'income_increase', label: 'Income going up' },
   { value: 'income_decrease', label: 'Income going down' },
@@ -147,6 +155,61 @@ function errorFor(errors: FieldError[], fieldPath: string): FieldError | undefin
   return errors.find((error) => error.field === fieldPath)
 }
 
+function entriesFor(draft: Draft, collection: EntryCollection): EntryDraft[] {
+  const collections: Record<EntryCollection, EntryDraft[]> = {
+    income_entries: draft.income,
+    outgoing_entries: draft.outgoings,
+    repayment_commitments: draft.commitments,
+    'looking_ahead.irregular_costs': draft.irregularCosts,
+    'looking_ahead.protected_future_provisions': draft.futureProvisions,
+    'looking_ahead.expected_changes': draft.expectedChanges,
+  }
+  return collections[collection]
+}
+
+/** Convert server index paths to stable entry paths before rows can be removed or reordered. */
+function stableFieldPath(field: string, draft: Draft): string {
+  const collections: EntryCollection[] = [
+    'income_entries',
+    'outgoing_entries',
+    'repayment_commitments',
+    'looking_ahead.irregular_costs',
+    'looking_ahead.protected_future_provisions',
+    'looking_ahead.expected_changes',
+  ]
+  const collection = collections.find((candidate) => field.startsWith(`${candidate}.`))
+  if (!collection) return field
+
+  const remainder = field.slice(collection.length + 1)
+  const [indexText, ...tail] = remainder.split('.')
+  if (!/^\d+$/.test(indexText)) return field
+  const entry = entriesFor(draft, collection)[Number(indexText)]
+  if (!entry) return field
+  return `${collection}.${entry.entryId}.${tail.join('.')}`
+}
+
+function stableErrors(errors: FieldError[], draft: Draft): FieldError[] {
+  return errors.map((error) => ({ ...error, field: stableFieldPath(error.field, draft) }))
+}
+
+function generatedValidationErrors(detail: unknown, draft: Draft): FieldError[] {
+  if (!Array.isArray(detail)) return []
+  return stableErrors(
+    detail.flatMap((issue) => {
+      if (!issue || typeof issue !== 'object') return []
+      const candidate = issue as { loc?: unknown; msg?: unknown; type?: unknown }
+      if (!Array.isArray(candidate.loc) || typeof candidate.msg !== 'string') return []
+      const field = candidate.loc
+        .filter((part, index) => !(index === 0 && part === 'body'))
+        .map(String)
+        .join('.')
+      if (!field) return []
+      return [{ field, code: typeof candidate.type === 'string' ? candidate.type : 'invalid', message: candidate.msg }]
+    }),
+    draft,
+  )
+}
+
 function FieldMessage({ error }: { error: FieldError | undefined }) {
   if (!error) return null
   return (
@@ -159,7 +222,6 @@ function FieldMessage({ error }: { error: FieldError | undefined }) {
 function EntryRow({
   noun,
   fieldPrefix,
-  index,
   entry,
   errors,
   onChange,
@@ -167,14 +229,13 @@ function EntryRow({
 }: {
   noun: string
   fieldPrefix: string
-  index: number
   entry: EntryDraft
   errors: FieldError[]
   onChange: (next: EntryDraft) => void
   onRemove: () => void
 }) {
   const label = entry.description || 'New entry'
-  const path = (field: string) => `${fieldPrefix}.${index}.${field}`
+  const path = (field: string) => `${fieldPrefix}.${entry.entryId}.${field}`
   const amountError = errorFor(errors, path('amount'))
   const frequencyError = errorFor(errors, path('frequency'))
   const descriptionError = errorFor(errors, path('description'))
@@ -191,6 +252,7 @@ function EntryRow({
             type="text"
             aria-label={`${label} description`}
             aria-invalid={descriptionError ? true : undefined}
+            aria-describedby={descriptionError ? `${domId(path('description'))}-error` : undefined}
             value={entry.description}
             onChange={(event) => onChange({ ...entry, description: event.target.value })}
           />
@@ -210,8 +272,11 @@ function EntryRow({
             inputMode="decimal"
             aria-label={`${label} amount`}
             aria-invalid={amountError ? true : undefined}
+            aria-describedby={amountError ? `${domId(path('amount'))}-error` : undefined}
             value={entry.amount}
-            onChange={(event) => onChange({ ...entry, amount: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...entry, amount: event.target.value, normalizedMonthlyAmount: null })
+            }
           />
           <FieldMessage error={amountError} />
         </div>
@@ -224,9 +289,12 @@ function EntryRow({
             id={domId(path('frequency'))}
             aria-label={`${label} frequency`}
             aria-invalid={frequencyError ? true : undefined}
+            aria-describedby={frequencyError ? `${domId(path('frequency'))}-error` : undefined}
             className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
             value={entry.frequency}
-            onChange={(event) => onChange({ ...entry, frequency: event.target.value })}
+            onChange={(event) =>
+              onChange({ ...entry, frequency: event.target.value, normalizedMonthlyAmount: null })
+            }
           >
             {FREQUENCIES.map((frequency) => (
               <option key={frequency} value={frequency}>
@@ -280,7 +348,6 @@ function EntrySection({
             key={entry.entryId}
             noun={noun}
             fieldPrefix={fieldPrefix}
-            index={index}
             entry={entry}
             errors={errors}
             onChange={(next) => onChange(entries.map((e, i) => (i === index ? next : e)))}
@@ -323,7 +390,7 @@ function ExpectedChangeSection({
       ) : (
         entries.map((change, index) => {
           const label = change.description || 'New entry'
-          const path = (field: string) => `${fieldPrefix}.${index}.${field}`
+          const path = (field: string) => `${fieldPrefix}.${change.entryId}.${field}`
           const kindError = errorFor(errors, path('kind'))
           const replace = (next: ChangeDraft) => onChange(entries.map((c, i) => (i === index ? next : c)))
 
@@ -342,6 +409,7 @@ function ExpectedChangeSection({
                   id={domId(path('kind'))}
                   aria-label={`${label} kind`}
                   aria-invalid={kindError ? true : undefined}
+                  aria-describedby={kindError ? `${domId(path('kind'))}-error` : undefined}
                   className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
                   value={change.kind}
                   onChange={(event) => replace({ ...change, kind: event.target.value })}
@@ -358,7 +426,6 @@ function ExpectedChangeSection({
               <EntryRow
                 noun="Change detail"
                 fieldPrefix={fieldPrefix}
-                index={index}
                 entry={change}
                 errors={errors}
                 onChange={(next) => replace({ ...next, kind: change.kind })}
@@ -394,6 +461,9 @@ function OptionalAmountField({
   hint?: string
 }) {
   const error = errorFor(errors, fieldPath)
+  const hintId = hint ? `${domId(fieldPath)}-hint` : undefined
+  const errorId = error ? `${domId(fieldPath)}-error` : undefined
+  const describedBy = [hintId, errorId].filter(Boolean).join(' ') || undefined
   return (
     <div>
       <label className="text-sm text-muted-foreground" htmlFor={domId(fieldPath)}>
@@ -405,10 +475,11 @@ function OptionalAmountField({
         inputMode="decimal"
         aria-label={label}
         aria-invalid={error ? true : undefined}
+        aria-describedby={describedBy}
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />
-      {hint && <p className="mt-1 text-sm text-muted-foreground">{hint}</p>}
+      {hint && <p className="mt-1 text-sm text-muted-foreground" id={hintId}>{hint}</p>}
       <FieldMessage error={error} />
     </div>
   )
@@ -520,16 +591,12 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       if (result.error || !result.data) throw new Error('statement_unavailable')
       return result.data as EditableStatementResponse
     },
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
   })
 
-  useEffect(() => {
-    if (!query.data) return
-    setDraft(toDraft(query.data))
-    setVersion(query.data.version)
-    setErrors([])
-    setSummaryMessage(null)
-    setConflictMessage(null)
-  }, [query.data])
+  const activeDraft = draft ?? (query.data ? toDraft(query.data) : null)
+  const activeVersion = version ?? query.data?.version ?? null
 
   // A rejected submission must never discard what the customer typed, so the
   // draft is only ever replaced by a fresh retrieval or an accepted save.
@@ -539,14 +606,18 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       setConflictMessage(body.message ?? 'This statement changed. Refresh to see the current version.')
       return
     }
-    setErrors(body.errors ?? [])
+    const rejectedDraft = activeDraft as Draft
+    const fieldErrors = Array.isArray(detail)
+      ? generatedValidationErrors(detail, rejectedDraft)
+      : stableErrors(body.errors ?? [], rejectedDraft)
+    setErrors(fieldErrors)
     setSummaryMessage(body.message ?? 'Nothing was saved. Check the highlighted fields and try again.')
   }
 
   const previewMutation = useMutation({
     mutationFn: async () => {
       const result = await previewFinancialStatementFinancialStatementPreviewPost({
-        body: toSubmission(draft as Draft, statementPeriod) as never,
+        body: toSubmission(activeDraft as Draft, statementPeriod) as never,
       })
       if (result.error || !result.data) {
         applyRejection((result.error as { detail?: unknown })?.detail, result.response?.status ?? 0)
@@ -568,7 +639,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
   const saveMutation = useMutation({
     mutationFn: async () => {
       const result = await updateFinancialStatementFinancialStatementPut({
-        body: { ...toSubmission(draft as Draft, statementPeriod), expected_version: version } as never,
+        body: { ...toSubmission(activeDraft as Draft, statementPeriod), expected_version: activeVersion } as never,
       })
       if (result.error || !result.data) {
         applyRejection((result.error as { detail?: unknown })?.detail, result.response?.status ?? 0)
@@ -585,6 +656,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
     onSuccess: (data) => {
       setDraft(toDraft(data))
       setVersion(data.version)
+      setPreview(null)
       setStatus('Your statement was saved.')
     },
   })
@@ -610,7 +682,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
     )
   }
 
-  if (query.isError || !draft) {
+  if (query.isError || !activeDraft) {
     return (
       <Alert variant="destructive" className="mx-auto w-full max-w-3xl">
         <AlertTriangle />
@@ -620,7 +692,11 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
     )
   }
 
-  const update = (patch: Partial<Draft>) => setDraft({ ...draft, ...patch })
+  const update = (patch: Partial<Draft>) => {
+    setDraft({ ...activeDraft, ...patch })
+    setPreview(null)
+    setStatus(null)
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -634,7 +710,20 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
           <AlertTitle>This statement changed somewhere else</AlertTitle>
           <AlertDescription className="space-y-2">
             <p>{conflictMessage}</p>
-            <Button type="button" variant="outline" onClick={() => query.refetch()}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={async () => {
+                const refreshed = await query.refetch()
+                if (!refreshed.data) return
+                setDraft(toDraft(refreshed.data))
+                setVersion(refreshed.data.version)
+                setErrors([])
+                setSummaryMessage(null)
+                setConflictMessage(null)
+                setPreview(null)
+              }}
+            >
               Refresh this statement
             </Button>
           </AlertDescription>
@@ -663,7 +752,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             noun="Income"
             addLabel="Add an income entry"
             fieldPrefix="income_entries"
-            entries={draft.income}
+            entries={activeDraft.income}
             errors={errors}
             onChange={(income) => update({ income })}
           />
@@ -675,7 +764,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             noun="Outgoing"
             addLabel="Add an outgoing"
             fieldPrefix="outgoing_entries"
-            entries={draft.outgoings}
+            entries={activeDraft.outgoings}
             errors={errors}
             onChange={(outgoings) => update({ outgoings })}
           />
@@ -688,7 +777,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             noun="Repayment commitment"
             addLabel="Add a repayment commitment"
             fieldPrefix="repayment_commitments"
-            entries={draft.commitments}
+            entries={activeDraft.commitments}
             errors={errors}
             onChange={(commitments) => update({ commitments })}
           />
@@ -707,38 +796,38 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
               <OptionalAmountField
                 label="Accessible savings"
                 fieldPath="resilience.accessible_savings"
-                value={draft.resilience.accessible_savings}
+                value={activeDraft.resilience.accessible_savings}
                 errors={errors}
                 onChange={(accessible_savings) =>
-                  update({ resilience: { ...draft.resilience, accessible_savings } })
+                  update({ resilience: { ...activeDraft.resilience, accessible_savings } })
                 }
               />
               <OptionalAmountField
                 label="Protected reserve"
                 fieldPath="resilience.protected_reserve"
-                value={draft.resilience.protected_reserve}
+                value={activeDraft.resilience.protected_reserve}
                 errors={errors}
                 onChange={(protected_reserve) =>
-                  update({ resilience: { ...draft.resilience, protected_reserve } })
+                  update({ resilience: { ...activeDraft.resilience, protected_reserve } })
                 }
               />
               <OptionalAmountField
                 label="Current-account balance"
                 hint="Enter a negative amount if you are overdrawn."
                 fieldPath="resilience.current_account_balance"
-                value={draft.resilience.current_account_balance}
+                value={activeDraft.resilience.current_account_balance}
                 errors={errors}
                 onChange={(current_account_balance) =>
-                  update({ resilience: { ...draft.resilience, current_account_balance } })
+                  update({ resilience: { ...activeDraft.resilience, current_account_balance } })
                 }
               />
               <OptionalAmountField
                 label="Known arrears"
                 fieldPath="resilience.known_arrears"
-                value={draft.resilience.known_arrears}
+                value={activeDraft.resilience.known_arrears}
                 errors={errors}
                 onChange={(known_arrears) =>
-                  update({ resilience: { ...draft.resilience, known_arrears } })
+                  update({ resilience: { ...activeDraft.resilience, known_arrears } })
                 }
               />
             </div>
@@ -752,7 +841,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             noun="Irregular cost"
             addLabel="Add an irregular cost"
             fieldPrefix="looking_ahead.irregular_costs"
-            entries={draft.irregularCosts}
+            entries={activeDraft.irregularCosts}
             errors={errors}
             onChange={(irregularCosts) => update({ irregularCosts })}
           />
@@ -765,7 +854,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
             noun="Protected future provision"
             addLabel="Add a future provision"
             fieldPrefix="looking_ahead.protected_future_provisions"
-            entries={draft.futureProvisions}
+            entries={activeDraft.futureProvisions}
             errors={errors}
             onChange={(futureProvisions) => update({ futureProvisions })}
           />
@@ -773,7 +862,7 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
           <Separator />
 
           <ExpectedChangeSection
-            entries={draft.expectedChanges}
+            entries={activeDraft.expectedChanges}
             errors={errors}
             onChange={(expectedChanges) => update({ expectedChanges })}
           />
