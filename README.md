@@ -9,7 +9,49 @@ Azure OpenAI is limited to unconfirmed outgoing-classification suggestions and o
 ## Status
 
 Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration have been prepared.
-Application implementation is the next step and will follow vertical test-driven slices.
+The first tracer-bullet slice is implemented and verified: Docker Compose starts the frontend, backend, PostgreSQL, and a one-shot migration-and-seed step, and the browser overview shows a seeded fictional customer's normalized monthly income, outgoings, and headroom calculated by the deterministic financial-health module.
+The frontend uses Tailwind CSS and shadcn/ui components.
+Later journey steps below (classification, snapshots, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
+
+## Quick start
+
+```bash
+cp .env.example .env  # optional; Docker Compose also reads .env.example directly
+docker compose up --build
+```
+
+Then open http://localhost:5173 for the overview and http://localhost:8000/health/live and http://localhost:8000/health/ready for backend health.
+This has been verified from a clean checkout (`docker compose down -v` followed by `docker compose up --build`) with no Azure OpenAI variables set.
+
+## Running the tests
+
+Backend tests require a running PostgreSQL instance. The simplest way to get one locally:
+
+```bash
+docker run -d --name cfha-test-postgres \
+  -e POSTGRES_USER=cfha -e POSTGRES_PASSWORD=cfha_test_password \
+  -e POSTGRES_DB=customer_financial_health_test -p 55432:5432 postgres:16-alpine
+
+cd backend
+uv run pytest
+```
+
+`TEST_DATABASE_URL` defaults to `postgresql+psycopg://cfha:cfha_test_password@localhost:55432/customer_financial_health_test`; override it if you use a different local Postgres.
+
+Frontend component tests:
+
+```bash
+cd frontend
+npm install
+npm run test
+```
+
+To regenerate the TypeScript client after a backend API change:
+
+```bash
+cd backend && PYTHONPATH=src uv run export-openapi
+cd ../frontend && npm run generate-client
+```
 
 ## Product principles
 
@@ -20,21 +62,20 @@ Application implementation is the next step and will follow vertical test-driven
 - Preserve confirmed historical results through immutable versioned snapshots.
 - Keep the complete core journey available without Azure OpenAI.
 
-## Planned reviewer journey
+## Reviewer journey
 
-1. Start the frontend, backend, PostgreSQL, and migrations with Docker Compose.
-2. Open the seeded customer's financial-health overview.
-3. Review the current monthly position, resilience, and historical change.
-4. Add a known outgoing and observe deterministic classification.
-5. Add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
-6. Preview and confirm a new immutable snapshot.
-7. Inspect the updated history and deterministic change explanation.
-8. Explore and save a repayment scenario without modifying the statement.
-9. Request an optional personalized explanation.
-10. Load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
+1. **Done.** Start the frontend, backend, PostgreSQL, and migrations with Docker Compose.
+2. **Done.** Open the seeded customer's financial-health overview, showing normalized monthly income, outgoings, and headroom with the calculation formula, original amounts and frequencies, and calculation-policy version.
+3. Planned: review resilience and historical change.
+4. Planned: add a known outgoing and observe deterministic classification.
+5. Planned: add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
+6. Planned: preview and confirm a new immutable snapshot.
+7. Planned: inspect the updated history and deterministic change explanation.
+8. Planned: explore and save a repayment scenario without modifying the statement.
+9. Planned: request an optional personalized explanation.
+10. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
 
-The exact run and test commands will be added and verified as each executable slice lands.
-The final README will not claim commands that have not been exercised from a clean checkout.
+Run and test commands are documented above only once they have been exercised from a clean checkout.
 
 ## Documentation
 

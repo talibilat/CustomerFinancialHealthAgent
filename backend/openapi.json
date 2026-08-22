@@ -1,0 +1,170 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Customer Financial Health API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health/live": {
+      "get": {
+        "summary": "Liveness",
+        "operationId": "liveness_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Liveness Health Live Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "summary": "Readiness",
+        "operationId": "readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Readiness Health Ready Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overview": {
+      "get": {
+        "summary": "Get Overview",
+        "operationId": "get_overview_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "MoneyEntryOut": {
+        "properties": {
+          "original_amount": {
+            "type": "string",
+            "title": "Original Amount"
+          },
+          "original_frequency": {
+            "type": "string",
+            "title": "Original Frequency"
+          },
+          "normalized_monthly_amount": {
+            "type": "string",
+            "title": "Normalized Monthly Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "original_amount",
+          "original_frequency",
+          "normalized_monthly_amount"
+        ],
+        "title": "MoneyEntryOut"
+      },
+      "OverviewResponse": {
+        "properties": {
+          "customer_id": {
+            "type": "string",
+            "title": "Customer Id"
+          },
+          "statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Period"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Confirmed At"
+          },
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "normalized_monthly_income": {
+            "type": "string",
+            "title": "Normalized Monthly Income"
+          },
+          "normalized_monthly_outgoings": {
+            "type": "string",
+            "title": "Normalized Monthly Outgoings"
+          },
+          "monthly_headroom": {
+            "type": "string",
+            "title": "Monthly Headroom"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/MoneyEntryOut"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/MoneyEntryOut"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "customer_id",
+          "statement_period",
+          "confirmed_at",
+          "calculation_policy_version",
+          "normalized_monthly_income",
+          "normalized_monthly_outgoings",
+          "monthly_headroom",
+          "result_code",
+          "warnings",
+          "income_entries",
+          "outgoing_entries"
+        ],
+        "title": "OverviewResponse"
+      }
+    }
+  }
+}
