@@ -1,0 +1,117 @@
+import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+
+import { Overview } from './Overview'
+import { getOverviewOverviewGet } from '@/api/generated'
+
+vi.mock('@/api/generated', () => ({
+  getOverviewOverviewGet: vi.fn(),
+}))
+
+function renderWithQueryClient() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <Overview />
+    </QueryClientProvider>,
+  )
+}
+
+const mockedGetOverview = vi.mocked(getOverviewOverviewGet)
+
+beforeEach(() => {
+  mockedGetOverview.mockReset()
+})
+
+describe('Overview', () => {
+  it('shows a loading state before data arrives', () => {
+    mockedGetOverview.mockReturnValue(new Promise(() => {}) as never)
+
+    renderWithQueryClient()
+
+    expect(screen.getByText(/loading/i)).toBeInTheDocument()
+  })
+
+  it('shows a recoverable message when the backend is unavailable', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: undefined,
+      error: { detail: 'unavailable' },
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 503 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText(/can.t reach/i)).toBeInTheDocument()
+  })
+
+  it('leads with normalized monthly income, outgoings, and exact headroom in GBP', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1195.00',
+        monthly_headroom: '1255.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [
+          { original_amount: '2450.00', original_frequency: 'monthly', normalized_monthly_amount: '2450.00' },
+        ],
+        outgoing_entries: [
+          { original_amount: '950.00', original_frequency: 'monthly', normalized_monthly_amount: '950.00' },
+        ],
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText('£2,450.00')).toBeInTheDocument()
+    expect(screen.getByText('£1,195.00')).toBeInTheDocument()
+    expect(screen.getByText('£1,255.00')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /review how this was calculated/i }))
+
+    expect(screen.getByText(/normalization-policy-v1/)).toBeInTheDocument()
+  })
+
+  it('never describes a surplus as proof of long-term affordability', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1195.00',
+        monthly_headroom: '1255.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    await screen.findByText('£1,255.00')
+
+    const bodyText = document.body.textContent ?? ''
+    expect(bodyText).not.toMatch(/you can afford/i)
+    expect(bodyText).not.toMatch(/\bhealthy\b/i)
+    expect(bodyText).not.toMatch(/\bapproved\b/i)
+    expect(bodyText).toMatch(/not a proof of long-term affordability/i)
+  })
+})

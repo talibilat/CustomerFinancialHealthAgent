@@ -1,6 +1,7 @@
 # Local agent harness
 AGENTS.md
 .agents/
+.serena/
 skills-lock.json
 
 # Secrets and local configuration
