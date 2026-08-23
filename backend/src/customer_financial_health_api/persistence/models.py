@@ -147,10 +147,47 @@ class EditableStatementEntry(Base):
     original_frequency: Mapped[str] = mapped_column(String, nullable=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # The confirmed classification, when the customer has settled one. All NULL
+    # while unresolved: an unclassified outgoing stores nothing rather than a
+    # fabricated default.
+    display_category: Mapped[str | None] = mapped_column(String, nullable=True)
+    outgoing_treatment: Mapped[str | None] = mapped_column(String, nullable=True)
+    classification_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    taxonomy_version: Mapped[str | None] = mapped_column(String, nullable=True)
+
     statement: Mapped["EditableFinancialStatement"] = relationship(back_populates="entries")
 
     __table_args__ = (
         CheckConstraint("original_amount >= 0", name="ck_editable_entry_amount_non_negative"),
+    )
+
+
+class CustomerClassificationPreference(Base):
+    """A classification rule the customer created by correcting a suggestion.
+
+    Scoped to one customer: two customers may hold opposite preferences for the
+    same phrase, and correcting one never affects the other or the global rules.
+    """
+
+    __tablename__ = "customer_classification_preferences"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    normalized_description: Mapped[str] = mapped_column(String, nullable=False)
+    display_category: Mapped[str] = mapped_column(String, nullable=False)
+    outgoing_treatment: Mapped[str] = mapped_column(String, nullable=False)
+    taxonomy_version: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id", "normalized_description", name="uq_preference_customer_description"
+        ),
     )
 
 
