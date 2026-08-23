@@ -5,6 +5,151 @@ export type ClientOptions = {
 };
 
 /**
+ * EditableStatementOut
+ */
+export type EditableStatementOut = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Currency
+     */
+    currency: string;
+    /**
+     * Income Entries
+     */
+    income_entries: Array<StatementEntryOut>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries: Array<StatementEntryOut>;
+    /**
+     * Repayment Commitments
+     */
+    repayment_commitments: Array<StatementEntryOut>;
+    resilience: ResilienceSectionOut;
+    looking_ahead: LookingAheadOut;
+};
+
+/**
+ * EditableStatementResponse
+ */
+export type EditableStatementResponse = {
+    /**
+     * Version
+     */
+    version: number;
+    /**
+     * Updated At
+     */
+    updated_at: string;
+    statement: EditableStatementOut;
+};
+
+/**
+ * ExpectedChangeIn
+ */
+export type ExpectedChangeIn = {
+    /**
+     * Entry Id
+     */
+    entry_id?: string | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Frequency
+     */
+    frequency: string;
+};
+
+/**
+ * ExpectedChangeOut
+ */
+export type ExpectedChangeOut = {
+    /**
+     * Entry Id
+     */
+    entry_id: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Kind
+     */
+    kind: string;
+    /**
+     * Original Amount
+     */
+    original_amount: string;
+    /**
+     * Original Frequency
+     */
+    original_frequency: string;
+    /**
+     * Normalized Monthly Amount
+     */
+    normalized_monthly_amount: string;
+};
+
+/**
+ * HTTPValidationError
+ */
+export type HttpValidationError = {
+    /**
+     * Detail
+     */
+    detail?: Array<ValidationError>;
+};
+
+/**
+ * LookingAheadIn
+ */
+export type LookingAheadIn = {
+    /**
+     * Irregular Costs
+     */
+    irregular_costs?: Array<StatementEntryIn>;
+    /**
+     * Protected Future Provisions
+     */
+    protected_future_provisions?: Array<StatementEntryIn>;
+    /**
+     * Expected Changes
+     */
+    expected_changes?: Array<ExpectedChangeIn>;
+};
+
+/**
+ * LookingAheadOut
+ */
+export type LookingAheadOut = {
+    /**
+     * Irregular Costs
+     */
+    irregular_costs: Array<StatementEntryOut>;
+    /**
+     * Protected Future Provisions
+     */
+    protected_future_provisions: Array<StatementEntryOut>;
+    /**
+     * Expected Changes
+     */
+    expected_changes: Array<ExpectedChangeOut>;
+};
+
+/**
  * MoneyEntryOut
  */
 export type MoneyEntryOut = {
@@ -74,6 +219,28 @@ export type OverviewResponse = {
 };
 
 /**
+ * ResilienceIn
+ */
+export type ResilienceIn = {
+    /**
+     * Accessible Savings
+     */
+    accessible_savings?: string | null;
+    /**
+     * Protected Reserve
+     */
+    protected_reserve?: string | null;
+    /**
+     * Current Account Balance
+     */
+    current_account_balance?: string | null;
+    /**
+     * Known Arrears
+     */
+    known_arrears?: string | null;
+};
+
+/**
  * ResilienceOut
  */
 export type ResilienceOut = {
@@ -109,6 +276,215 @@ export type ResilienceOut = {
      * Warnings
      */
     warnings: Array<string>;
+};
+
+/**
+ * ResilienceSectionOut
+ *
+ * The resilience values the customer reported, not the calculated result.
+ */
+export type ResilienceSectionOut = {
+    /**
+     * Accessible Savings
+     */
+    accessible_savings: string | null;
+    /**
+     * Protected Reserve
+     */
+    protected_reserve: string | null;
+    /**
+     * Current Account Balance
+     */
+    current_account_balance: string | null;
+    /**
+     * Known Arrears
+     */
+    known_arrears: string | null;
+};
+
+/**
+ * StatementEntryIn
+ */
+export type StatementEntryIn = {
+    /**
+     * Entry Id
+     */
+    entry_id?: string | null;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Amount
+     */
+    amount: string;
+    /**
+     * Frequency
+     */
+    frequency: string;
+};
+
+/**
+ * StatementEntryOut
+ */
+export type StatementEntryOut = {
+    /**
+     * Entry Id
+     */
+    entry_id: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Original Amount
+     */
+    original_amount: string;
+    /**
+     * Original Frequency
+     */
+    original_frequency: string;
+    /**
+     * Normalized Monthly Amount
+     */
+    normalized_monthly_amount: string;
+};
+
+/**
+ * StatementPreviewResponse
+ */
+export type StatementPreviewResponse = {
+    /**
+     * Calculation Policy Version
+     */
+    calculation_policy_version: string;
+    /**
+     * Normalized Monthly Income
+     */
+    normalized_monthly_income: string;
+    /**
+     * Normalized Monthly Outgoings
+     */
+    normalized_monthly_outgoings: string;
+    /**
+     * Monthly Headroom
+     */
+    monthly_headroom: string;
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Normalized Monthly Repayment Commitments
+     */
+    normalized_monthly_repayment_commitments: string;
+    /**
+     * Normalized Monthly Irregular Costs
+     */
+    normalized_monthly_irregular_costs: string;
+    /**
+     * Normalized Monthly Protected Future Provisions
+     */
+    normalized_monthly_protected_future_provisions: string;
+    /**
+     * Expected Changes
+     */
+    expected_changes: Array<ExpectedChangeOut>;
+    resilience: ResilienceOut;
+};
+
+/**
+ * StatementSubmission
+ */
+export type StatementSubmission = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Income Entries
+     */
+    income_entries?: Array<StatementEntryIn>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries?: Array<StatementEntryIn>;
+    /**
+     * Repayment Commitments
+     */
+    repayment_commitments?: Array<StatementEntryIn>;
+    resilience?: ResilienceIn;
+    looking_ahead?: LookingAheadIn;
+};
+
+/**
+ * StatementUpdateRequest
+ *
+ * A submission that replaces the stored statement it was built from.
+ */
+export type StatementUpdateRequest = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Income Entries
+     */
+    income_entries?: Array<StatementEntryIn>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries?: Array<StatementEntryIn>;
+    /**
+     * Repayment Commitments
+     */
+    repayment_commitments?: Array<StatementEntryIn>;
+    resilience?: ResilienceIn;
+    looking_ahead?: LookingAheadIn;
+    /**
+     * Expected Version
+     */
+    expected_version?: number | null;
+};
+
+/**
+ * ValidationError
+ */
+export type ValidationError = {
+    /**
+     * Location
+     */
+    loc: Array<string | number>;
+    /**
+     * Message
+     */
+    msg: string;
+    /**
+     * Error Type
+     */
+    type: string;
+    /**
+     * Input
+     */
+    input?: unknown;
+    /**
+     * Context
+     */
+    ctx?: {
+        [key: string]: unknown;
+    };
 };
 
 export type LivenessHealthLiveGetData = {
@@ -166,3 +542,83 @@ export type GetOverviewOverviewGetResponses = {
 };
 
 export type GetOverviewOverviewGetResponse = GetOverviewOverviewGetResponses[keyof GetOverviewOverviewGetResponses];
+
+export type RetrieveFinancialStatementFinancialStatementGetData = {
+    body?: never;
+    path?: never;
+    query: {
+        /**
+         * Statement Period
+         */
+        statement_period: string;
+    };
+    url: '/financial-statement';
+};
+
+export type RetrieveFinancialStatementFinancialStatementGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RetrieveFinancialStatementFinancialStatementGetError = RetrieveFinancialStatementFinancialStatementGetErrors[keyof RetrieveFinancialStatementFinancialStatementGetErrors];
+
+export type RetrieveFinancialStatementFinancialStatementGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: EditableStatementResponse;
+};
+
+export type RetrieveFinancialStatementFinancialStatementGetResponse = RetrieveFinancialStatementFinancialStatementGetResponses[keyof RetrieveFinancialStatementFinancialStatementGetResponses];
+
+export type UpdateFinancialStatementFinancialStatementPutData = {
+    body: StatementUpdateRequest;
+    path?: never;
+    query?: never;
+    url: '/financial-statement';
+};
+
+export type UpdateFinancialStatementFinancialStatementPutErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type UpdateFinancialStatementFinancialStatementPutError = UpdateFinancialStatementFinancialStatementPutErrors[keyof UpdateFinancialStatementFinancialStatementPutErrors];
+
+export type UpdateFinancialStatementFinancialStatementPutResponses = {
+    /**
+     * Successful Response
+     */
+    200: EditableStatementResponse;
+};
+
+export type UpdateFinancialStatementFinancialStatementPutResponse = UpdateFinancialStatementFinancialStatementPutResponses[keyof UpdateFinancialStatementFinancialStatementPutResponses];
+
+export type PreviewFinancialStatementFinancialStatementPreviewPostData = {
+    body: StatementSubmission;
+    path?: never;
+    query?: never;
+    url: '/financial-statement/preview';
+};
+
+export type PreviewFinancialStatementFinancialStatementPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewFinancialStatementFinancialStatementPreviewPostError = PreviewFinancialStatementFinancialStatementPreviewPostErrors[keyof PreviewFinancialStatementFinancialStatementPreviewPostErrors];
+
+export type PreviewFinancialStatementFinancialStatementPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: StatementPreviewResponse;
+};
+
+export type PreviewFinancialStatementFinancialStatementPreviewPostResponse = PreviewFinancialStatementFinancialStatementPreviewPostResponses[keyof PreviewFinancialStatementFinancialStatementPreviewPostResponses];

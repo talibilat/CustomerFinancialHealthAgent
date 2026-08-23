@@ -62,10 +62,362 @@
           }
         }
       }
+    },
+    "/financial-statement": {
+      "get": {
+        "tags": [
+          "financial-statement"
+        ],
+        "summary": "Retrieve Financial Statement",
+        "operationId": "retrieve_financial_statement_financial_statement_get",
+        "parameters": [
+          {
+            "name": "statement_period",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Statement Period"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditableStatementResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "financial-statement"
+        ],
+        "summary": "Update Financial Statement",
+        "operationId": "update_financial_statement_financial_statement_put",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EditableStatementResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/financial-statement/preview": {
+      "post": {
+        "tags": [
+          "financial-statement"
+        ],
+        "summary": "Preview Financial Statement",
+        "operationId": "preview_financial_statement_financial_statement_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementSubmission"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "EditableStatementOut": {
+        "properties": {
+          "statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Period"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          },
+          "repayment_commitments": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Repayment Commitments"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceSectionOut"
+          },
+          "looking_ahead": {
+            "$ref": "#/components/schemas/LookingAheadOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement_period",
+          "currency",
+          "income_entries",
+          "outgoing_entries",
+          "repayment_commitments",
+          "resilience",
+          "looking_ahead"
+        ],
+        "title": "EditableStatementOut"
+      },
+      "EditableStatementResponse": {
+        "properties": {
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "statement": {
+            "$ref": "#/components/schemas/EditableStatementOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "version",
+          "updated_at",
+          "statement"
+        ],
+        "title": "EditableStatementResponse"
+      },
+      "ExpectedChangeIn": {
+        "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "frequency": {
+            "type": "string",
+            "title": "Frequency"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "kind",
+          "amount",
+          "frequency"
+        ],
+        "title": "ExpectedChangeIn"
+      },
+      "ExpectedChangeOut": {
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "title": "Entry Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "original_amount": {
+            "type": "string",
+            "title": "Original Amount"
+          },
+          "original_frequency": {
+            "type": "string",
+            "title": "Original Frequency"
+          },
+          "normalized_monthly_amount": {
+            "type": "string",
+            "title": "Normalized Monthly Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_id",
+          "description",
+          "kind",
+          "original_amount",
+          "original_frequency",
+          "normalized_monthly_amount"
+        ],
+        "title": "ExpectedChangeOut"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "LookingAheadIn": {
+        "properties": {
+          "irregular_costs": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Irregular Costs"
+          },
+          "protected_future_provisions": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Protected Future Provisions"
+          },
+          "expected_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedChangeIn"
+            },
+            "type": "array",
+            "title": "Expected Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "LookingAheadIn"
+      },
+      "LookingAheadOut": {
+        "properties": {
+          "irregular_costs": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Irregular Costs"
+          },
+          "protected_future_provisions": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Protected Future Provisions"
+          },
+          "expected_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedChangeOut"
+            },
+            "type": "array",
+            "title": "Expected Changes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "irregular_costs",
+          "protected_future_provisions",
+          "expected_changes"
+        ],
+        "title": "LookingAheadOut"
+      },
       "MoneyEntryOut": {
         "properties": {
           "original_amount": {
@@ -169,6 +521,57 @@
         ],
         "title": "OverviewResponse"
       },
+      "ResilienceIn": {
+        "properties": {
+          "accessible_savings": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accessible Savings"
+          },
+          "protected_reserve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Reserve"
+          },
+          "current_account_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Account Balance"
+          },
+          "known_arrears": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Arrears"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "ResilienceIn"
+      },
       "ResilienceOut": {
         "properties": {
           "accessible_savings": {
@@ -269,6 +672,346 @@
           "warnings"
         ],
         "title": "ResilienceOut"
+      },
+      "ResilienceSectionOut": {
+        "properties": {
+          "accessible_savings": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Accessible Savings"
+          },
+          "protected_reserve": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Reserve"
+          },
+          "current_account_balance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Account Balance"
+          },
+          "known_arrears": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Arrears"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "accessible_savings",
+          "protected_reserve",
+          "current_account_balance",
+          "known_arrears"
+        ],
+        "title": "ResilienceSectionOut",
+        "description": "The resilience values the customer reported, not the calculated result."
+      },
+      "StatementEntryIn": {
+        "properties": {
+          "entry_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entry Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "amount": {
+            "type": "string",
+            "title": "Amount"
+          },
+          "frequency": {
+            "type": "string",
+            "title": "Frequency"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "amount",
+          "frequency"
+        ],
+        "title": "StatementEntryIn"
+      },
+      "StatementEntryOut": {
+        "properties": {
+          "entry_id": {
+            "type": "string",
+            "title": "Entry Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "original_amount": {
+            "type": "string",
+            "title": "Original Amount"
+          },
+          "original_frequency": {
+            "type": "string",
+            "title": "Original Frequency"
+          },
+          "normalized_monthly_amount": {
+            "type": "string",
+            "title": "Normalized Monthly Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "entry_id",
+          "description",
+          "original_amount",
+          "original_frequency",
+          "normalized_monthly_amount"
+        ],
+        "title": "StatementEntryOut"
+      },
+      "StatementPreviewResponse": {
+        "properties": {
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "normalized_monthly_income": {
+            "type": "string",
+            "title": "Normalized Monthly Income"
+          },
+          "normalized_monthly_outgoings": {
+            "type": "string",
+            "title": "Normalized Monthly Outgoings"
+          },
+          "monthly_headroom": {
+            "type": "string",
+            "title": "Monthly Headroom"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "normalized_monthly_repayment_commitments": {
+            "type": "string",
+            "title": "Normalized Monthly Repayment Commitments"
+          },
+          "normalized_monthly_irregular_costs": {
+            "type": "string",
+            "title": "Normalized Monthly Irregular Costs"
+          },
+          "normalized_monthly_protected_future_provisions": {
+            "type": "string",
+            "title": "Normalized Monthly Protected Future Provisions"
+          },
+          "expected_changes": {
+            "items": {
+              "$ref": "#/components/schemas/ExpectedChangeOut"
+            },
+            "type": "array",
+            "title": "Expected Changes"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceOut"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "calculation_policy_version",
+          "normalized_monthly_income",
+          "normalized_monthly_outgoings",
+          "monthly_headroom",
+          "result_code",
+          "warnings",
+          "normalized_monthly_repayment_commitments",
+          "normalized_monthly_irregular_costs",
+          "normalized_monthly_protected_future_provisions",
+          "expected_changes",
+          "resilience"
+        ],
+        "title": "StatementPreviewResponse"
+      },
+      "StatementSubmission": {
+        "properties": {
+          "statement_period": {
+            "type": "string",
+            "title": "Statement Period"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "GBP"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          },
+          "repayment_commitments": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Repayment Commitments"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceIn"
+          },
+          "looking_ahead": {
+            "$ref": "#/components/schemas/LookingAheadIn"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement_period"
+        ],
+        "title": "StatementSubmission"
+      },
+      "StatementUpdateRequest": {
+        "properties": {
+          "statement_period": {
+            "type": "string",
+            "title": "Statement Period"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "GBP"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          },
+          "repayment_commitments": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Repayment Commitments"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceIn"
+          },
+          "looking_ahead": {
+            "$ref": "#/components/schemas/LookingAheadIn"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement_period"
+        ],
+        "title": "StatementUpdateRequest",
+        "description": "A submission that replaces the stored statement it was built from."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
       }
     }
   }

@@ -11,8 +11,10 @@ Azure OpenAI is limited to unconfirmed outgoing-classification suggestions and o
 Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration have been prepared.
 The first tracer-bullet slice is implemented and verified: Docker Compose starts the frontend, backend, PostgreSQL, and a one-shot migration-and-seed step, and the browser overview shows a seeded fictional customer's normalized monthly income, outgoings, and headroom calculated by the deterministic financial-health module.
 Financial resilience is also implemented: the overview separately shows accessible savings, protected reserve, current-account balance, and known arrears, with a below/at/above-reserve result that never changes the monthly cash-flow figures above it.
+The update flow is implemented as well: the customer can review and change their editable financial statement, add and remove income, outgoings, existing repayment commitments, irregular costs, and protected future provisions, supply or omit resilience information, and preview the recalculated position without confirming anything or changing history.
+Unusable values are refused against their own field, an invalid submission preserves everything entered and states that nothing was saved, and a submission built from a superseded version returns a conflict the customer can refresh from.
 The frontend uses Tailwind CSS and shadcn/ui components.
-Later journey steps below (update flow, classification, snapshots, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
+Later journey steps below (classification, snapshot confirmation, history, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
 
 ## Quick start
 
@@ -43,8 +45,22 @@ Frontend component tests:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run test
+```
+
+The Playwright journey starts or reuses the Docker Compose application and verifies the connected statement preview plus the 375px layout:
+
+```bash
+cd frontend
+npx playwright install chromium
+npm run test:e2e
+```
+
+The suite reuses an already-running stack rather than rebuilding it, so rebuild the frontend image after changing frontend code or the run will test the previous build:
+
+```bash
+docker compose up --build -d frontend
 ```
 
 To regenerate the TypeScript client after a backend API change:
@@ -68,14 +84,15 @@ cd ../frontend && npm run generate-client
 1. **Done.** Start the frontend, backend, PostgreSQL, and migrations with Docker Compose.
 2. **Done.** Open the seeded customer's financial-health overview, showing normalized monthly income, outgoings, and headroom with the calculation formula, original amounts and frequencies, and calculation-policy version.
 3. **Done.** Review financial resilience separately from monthly cash flow: accessible savings, protected reserve, current-account balance, known arrears, and a below/at/above-reserve result that never changes the monthly headroom above it.
-4. Planned: review historical change.
-5. Planned: add a known outgoing and observe deterministic classification.
-6. Planned: add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
-7. Planned: preview and confirm a new immutable snapshot.
-8. Planned: inspect the updated history and deterministic change explanation.
-9. Planned: explore and save a repayment scenario without modifying the statement.
-10. Planned: request an optional personalized explanation.
-11. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
+4. **Done.** Open **Update my information**, change a reported amount, and preview the recalculated monthly position. The preview states that nothing has been saved, and the overview's confirmed figures are unchanged behind it.
+5. **Done.** Enter an unusable amount such as a negative number, a blank, or `NaN`. Every invalid field is listed in an error summary that takes focus and links back to the control, everything already entered is preserved, and the response says nothing was saved.
+6. Planned: add a known outgoing and observe deterministic classification.
+7. Planned: add an ambiguous outgoing and confirm or correct the Azure OpenAI suggestion.
+8. Planned: confirm a new immutable snapshot.
+9. Planned: inspect the updated history and deterministic change explanation.
+10. Planned: explore and save a repayment scenario without modifying the statement.
+11. Planned: request an optional personalized explanation.
+12. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 

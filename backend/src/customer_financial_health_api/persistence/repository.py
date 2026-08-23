@@ -16,12 +16,30 @@ from customer_financial_health_api.domain.financial_health import (
     ResilienceResultCode,
     normalize_to_monthly,
 )
+from customer_financial_health_api.domain.statement import (
+    ExpectedChange,
+    ExpectedChangeKind,
+    FinancialStatement,
+    LookingAheadInput,
+    ResilienceInput,
+    StatementEntry,
+)
 from customer_financial_health_api.persistence.models import (
     ConfirmedSnapshot,
     Customer,
+    EditableFinancialStatement,
+    EditableStatementEntry,
+    EditableStatementExpectedChange,
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
 )
+
+# Which statement section each stored entry row belongs to.
+INCOME = "income"
+OUTGOING = "outgoing"
+REPAYMENT_COMMITMENT = "repayment_commitment"
+IRREGULAR_COST = "irregular_cost"
+PROTECTED_FUTURE_PROVISION = "protected_future_provision"
 
 
 @dataclass(frozen=True)
@@ -46,6 +64,24 @@ class ConfirmedSnapshotView:
     income_entries: tuple[SnapshotEntryView, ...]
     outgoing_entries: tuple[SnapshotEntryView, ...]
     resilience: ResilienceResult
+
+
+class StaleStatementVersion(Exception):
+    """Raised when a save is built from a statement version that is no longer current."""
+
+    def __init__(self, *, expected: int | None, current: int):
+        self.expected = expected
+        self.current = current
+        super().__init__(f"expected version {expected}, but the stored statement is at version {current}")
+
+
+@dataclass(frozen=True)
+class EditableStatementView:
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    version: int
+    updated_at: datetime
+    statement: FinancialStatement
 
 
 def create_customer(session: Session) -> Customer:
@@ -175,3 +211,143 @@ def get_effective_snapshot(session: Session, *, customer_id: uuid.UUID) -> Confi
     if snapshot is None:
         return None
     return _to_view(snapshot)
+
+
+def _entry_rows_for(section: str, entries: Sequence[StatementEntry]) -> list[EditableStatementEntry]:
+    return [
+        EditableStatementEntry(
+            section=section,
+            entry_key=entry.entry_id,
+            description=entry.description,
+            original_amount=entry.amount,
+            original_frequency=entry.frequency.value,
+            sort_order=index,
+        )
+        for index, entry in enumerate(entries)
+    ]
+
+
+def save_editable_statement(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    statement: FinancialStatement,
+    expected_version: int | None,
+) -> EditableStatementView:
+    """Create or replace the customer's editable statement for its period.
+
+    ``expected_version`` is the version the submission was built from. Pass
+    ``None`` only when creating the statement for the first time. A mismatch
+    raises :class:`StaleStatementVersion` so the customer can refresh instead
+    of overwriting a newer edit.
+    """
+    stmt = select(EditableFinancialStatement).where(
+        EditableFinancialStatement.customer_id == customer_id,
+        EditableFinancialStatement.statement_period == statement.statement_period,
+    ).with_for_update()
+    stored = session.execute(stmt).scalar_one_or_none()
+
+    if stored is None:
+        if expected_version is not None:
+            raise StaleStatementVersion(expected=expected_version, current=0)
+        stored = EditableFinancialStatement(
+            customer_id=customer_id,
+            statement_period=statement.statement_period,
+            version=1,
+        )
+        session.add(stored)
+    else:
+        if expected_version != stored.version:
+            raise StaleStatementVersion(expected=expected_version, current=stored.version)
+        stored.version += 1
+
+    stored.currency = statement.currency
+    stored.accessible_savings = statement.resilience.accessible_savings
+    stored.protected_reserve = statement.resilience.protected_reserve
+    stored.current_account_balance = statement.resilience.current_account_balance
+    stored.known_arrears = statement.resilience.known_arrears
+
+    # Reported lines are replaced wholesale: the submission is the complete
+    # statement, so add, change, and remove all resolve to one assignment.
+    stored.entries = (
+        _entry_rows_for(INCOME, statement.income_entries)
+        + _entry_rows_for(OUTGOING, statement.outgoing_entries)
+        + _entry_rows_for(REPAYMENT_COMMITMENT, statement.repayment_commitments)
+        + _entry_rows_for(IRREGULAR_COST, statement.looking_ahead.irregular_costs)
+        + _entry_rows_for(PROTECTED_FUTURE_PROVISION, statement.looking_ahead.protected_future_provisions)
+    )
+    stored.expected_changes = [
+        EditableStatementExpectedChange(
+            entry_key=change.entry_id,
+            description=change.description,
+            kind=change.kind.value,
+            original_amount=change.amount,
+            original_frequency=change.frequency.value,
+            sort_order=index,
+        )
+        for index, change in enumerate(statement.looking_ahead.expected_changes)
+    ]
+
+    session.flush()
+    return _to_editable_view(stored)
+
+
+def _to_editable_view(stored: EditableFinancialStatement) -> EditableStatementView:
+    def section(name: str) -> tuple[StatementEntry, ...]:
+        return tuple(
+            StatementEntry(
+                entry_id=row.entry_key,
+                description=row.description,
+                amount=row.original_amount,
+                frequency=Frequency(row.original_frequency),
+            )
+            for row in stored.entries
+            if row.section == name
+        )
+
+    return EditableStatementView(
+        id=stored.id,
+        customer_id=stored.customer_id,
+        version=stored.version,
+        updated_at=stored.updated_at,
+        statement=FinancialStatement(
+            statement_period=stored.statement_period,
+            income_entries=section(INCOME),
+            outgoing_entries=section(OUTGOING),
+            repayment_commitments=section(REPAYMENT_COMMITMENT),
+            resilience=ResilienceInput(
+                accessible_savings=stored.accessible_savings,
+                protected_reserve=stored.protected_reserve,
+                current_account_balance=stored.current_account_balance,
+                known_arrears=stored.known_arrears,
+            ),
+            looking_ahead=LookingAheadInput(
+                irregular_costs=section(IRREGULAR_COST),
+                protected_future_provisions=section(PROTECTED_FUTURE_PROVISION),
+                expected_changes=tuple(
+                    ExpectedChange(
+                        entry_id=row.entry_key,
+                        description=row.description,
+                        kind=ExpectedChangeKind(row.kind),
+                        amount=row.original_amount,
+                        frequency=Frequency(row.original_frequency),
+                    )
+                    for row in stored.expected_changes
+                ),
+            ),
+            currency=stored.currency,
+        ),
+    )
+
+
+def get_editable_statement(
+    session: Session, *, customer_id: uuid.UUID, statement_period: date
+) -> EditableStatementView | None:
+    stmt = select(EditableFinancialStatement).where(
+        EditableFinancialStatement.customer_id == customer_id,
+        EditableFinancialStatement.statement_period == statement_period,
+    )
+    stored = session.execute(stmt).scalar_one_or_none()
+    if stored is None:
+        return None
+    return _to_editable_view(stored)

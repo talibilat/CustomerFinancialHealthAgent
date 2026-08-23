@@ -14,25 +14,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
-
-const gbpFormatter = new Intl.NumberFormat('en-GB', {
-  style: 'currency',
-  currency: 'GBP',
-})
-
-const periodFormatter = new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' })
-
-function formatGbp(amount: string): string {
-  return gbpFormatter.format(Number(amount))
-}
-
-function formatFrequency(frequency: string): string {
-  return frequency.replace('_', '-')
-}
-
-function formatPeriod(statementPeriod: string): string {
-  return periodFormatter.format(new Date(`${statementPeriod}T00:00:00Z`))
-}
+import { formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
 
 const RESULT_PRESENTATION: Record<
   string,
@@ -97,7 +79,28 @@ function ResilienceBadge({ resultCode }: { resultCode: string }) {
   return <Badge variant={presentation.badgeVariant}>{presentation.label}</Badge>
 }
 
+// Each reported figure stands on its own: the customer may supply a balance or
+// arrears without supplying savings and a reserve, and vice versa. Derived
+// figures are omitted when zero because they only add noise at that value.
+function reportedResilienceFigures(resilience: ResilienceOut): { label: string; amount: string }[] {
+  const candidates: { label: string; amount: string | null; hideWhenZero?: boolean }[] = [
+    { label: 'Accessible savings', amount: resilience.accessible_savings },
+    { label: 'Protected reserve', amount: resilience.protected_reserve },
+    { label: 'Reserve gap', amount: resilience.reserve_gap, hideWhenZero: true },
+    { label: 'Savings above reserve', amount: resilience.savings_above_reserve, hideWhenZero: true },
+    { label: 'Current-account balance', amount: resilience.current_account_balance },
+    { label: 'Known arrears', amount: resilience.known_arrears },
+  ]
+
+  return candidates.filter(
+    (candidate): candidate is { label: string; amount: string } =>
+      candidate.amount !== null && !(candidate.hideWhenZero && Number(candidate.amount) === 0),
+  )
+}
+
 function ResilienceCard({ resilience }: { resilience: ResilienceOut }) {
+  const reportedFigures = reportedResilienceFigures(resilience)
+
   return (
     <Card className="mx-auto w-full max-w-xl">
       <CardHeader>
@@ -110,41 +113,27 @@ function ResilienceCard({ resilience }: { resilience: ResilienceOut }) {
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {resilience.result_code === null ? (
+        {reportedFigures.length > 0 && (
+          <div className="grid grid-cols-2 gap-4">
+            {reportedFigures.map((figure) => (
+              <StatBlock key={figure.label} label={figure.label} amount={figure.amount} />
+            ))}
+          </div>
+        )}
+
+        {resilience.result_code === null && (
           <p className="text-sm text-muted-foreground">
             Add accessible savings and a protected reserve to see how your savings compare. This does not affect
             your monthly position above.
           </p>
-        ) : (
-          <>
-            <div className="grid grid-cols-2 gap-4">
-              {resilience.accessible_savings !== null && (
-                <StatBlock label="Accessible savings" amount={resilience.accessible_savings} />
-              )}
-              {resilience.protected_reserve !== null && (
-                <StatBlock label="Protected reserve" amount={resilience.protected_reserve} />
-              )}
-              {resilience.reserve_gap !== null && resilience.reserve_gap !== '0.00' && (
-                <StatBlock label="Reserve gap" amount={resilience.reserve_gap} />
-              )}
-              {resilience.savings_above_reserve !== null && resilience.savings_above_reserve !== '0.00' && (
-                <StatBlock label="Savings above reserve" amount={resilience.savings_above_reserve} />
-              )}
-              {resilience.current_account_balance !== null && (
-                <StatBlock label="Current-account balance" amount={resilience.current_account_balance} />
-              )}
-              {resilience.known_arrears !== null && (
-                <StatBlock label="Known arrears" amount={resilience.known_arrears} />
-              )}
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Accessible savings are a separate resilience picture and never become monthly income or offset a
-              shortfall.
-            </p>
-          </>
         )}
 
-        {resilience.warnings.length > 0 && resilience.result_code !== null && (
+        <p className="text-sm text-muted-foreground">
+          Accessible savings are a separate resilience picture and never become monthly income or offset a
+          shortfall.
+        </p>
+
+        {resilience.warnings.length > 0 && (
           <Alert>
             <Info />
             <AlertTitle>Limitations</AlertTitle>

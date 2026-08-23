@@ -174,6 +174,71 @@ describe('Overview', () => {
     expect(bodyText).not.toMatch(/excess cash/i)
   })
 
+  it('still shows reported balance and arrears when savings and reserve are missing', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2000.00',
+        normalized_monthly_outgoings: '1500.00',
+        monthly_headroom: '500.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: {
+          accessible_savings: null,
+          protected_reserve: null,
+          current_account_balance: '125.40',
+          known_arrears: '640.00',
+          savings_above_reserve: null,
+          reserve_gap: null,
+          result_code: null,
+          warnings: ['resilience_info_missing'],
+        },
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    expect(await screen.findByText('£500.00')).toBeInTheDocument()
+    expect(screen.getByText('£125.40')).toBeInTheDocument()
+    expect(screen.getByText('£640.00')).toBeInTheDocument()
+  })
+
+  it('announces the resilience limitation when information is missing', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2000.00',
+        normalized_monthly_outgoings: '1500.00',
+        monthly_headroom: '500.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: emptyResilience(),
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+
+    await screen.findByText('£500.00')
+
+    expect(screen.getByText('resilience_info_missing')).toBeInTheDocument()
+  })
+
   it('shows a limitation instead of blocking when resilience information is missing', async () => {
     mockedGetOverview.mockResolvedValue({
       data: {
@@ -198,6 +263,6 @@ describe('Overview', () => {
     renderWithQueryClient()
 
     expect(await screen.findByText('£800.00')).toBeInTheDocument()
-    expect(screen.getByText(/resilience_info_missing|add.*savings|no resilience/i)).toBeInTheDocument()
+    expect(screen.getByText(/add accessible savings and a protected reserve/i)).toBeInTheDocument()
   })
 })
