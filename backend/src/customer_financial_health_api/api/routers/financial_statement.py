@@ -286,6 +286,25 @@ def update_financial_statement(
     statement = _validated(submission)
     confirmed, remember = _submitted_classifications(submission)
 
+    # A save that does not restate a classification must not discard it, but a
+    # classification only describes the wording it was confirmed against. If the
+    # customer renamed the entry, the old meaning is retired rather than carried
+    # onto something they never confirmed.
+    stored = get_editable_statement(
+        session, customer_id=customer.id, statement_period=statement.statement_period
+    )
+    if stored is not None:
+        submitted_descriptions = {
+            entry.entry_id: normalize_description(entry.description)
+            for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments)
+        }
+        carried = {
+            entry_id: outcome
+            for entry_id, outcome in stored.classifications.items()
+            if submitted_descriptions.get(entry_id) == outcome.normalized_description
+        }
+        confirmed = {**carried, **confirmed}
+
     # A correction the customer asked to remember becomes their own rule. It is
     # scoped to this customer and never edits the global rules.
     for _, outcome in remember:

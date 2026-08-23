@@ -228,3 +228,53 @@ class TestPreviewReportsUnresolved:
         ).json()
 
         assert after["monthly_headroom"] == before["monthly_headroom"]
+
+
+class TestConfirmedClassificationsSurviveEditing:
+    def _confirm_apple(self, client):
+        current = retrieve(client)
+        body = submitted(current["statement"], expected_version=current["version"])
+        body["outgoing_entries"].append(
+            {"entry_id": "amb-1", "description": "Apple", "amount": "9.99", "frequency": "monthly"}
+        )
+        client.put("/financial-statement", json=body)
+
+        current = retrieve(client)
+        body = submitted(current["statement"], expected_version=current["version"])
+        for entry in body["outgoing_entries"]:
+            if entry["entry_id"] == "amb-1":
+                entry["classification"] = {
+                    "display_category": "leisure_and_hobbies",
+                    "outgoing_treatment": "flexible_living_cost",
+                }
+        assert client.put("/financial-statement", json=body).status_code == 200
+
+    def test_a_later_save_that_omits_the_classification_does_not_discard_it(self, seeded):
+        self._confirm_apple(seeded)
+
+        # An ordinary edit elsewhere, with no classification restated.
+        current = retrieve(seeded)
+        body = submitted(current["statement"], expected_version=current["version"])
+        body["outgoing_entries"][0]["amount"] = "960.00"
+        assert seeded.put("/financial-statement", json=body).status_code == 200
+
+        apple = outgoing_named(retrieve(seeded)["statement"], "Apple")
+        assert apple["classification"]["display_category"] == "leisure_and_hobbies"
+        assert apple["classification"]["requires_confirmation"] is False
+
+    def test_renaming_an_entry_retires_the_classification_it_no_longer_describes(self, seeded):
+        self._confirm_apple(seeded)
+
+        current = retrieve(seeded)
+        body = submitted(current["statement"], expected_version=current["version"])
+        for entry in body["outgoing_entries"]:
+            if entry["entry_id"] == "amb-1":
+                entry["description"] = "Dance class"
+        assert seeded.put("/financial-statement", json=body).status_code == 200
+
+        renamed = next(
+            e for e in retrieve(seeded)["statement"]["outgoing_entries"] if e["entry_id"] == "amb-1"
+        )
+        # The customer confirmed what "Apple" was, not what "Dance class" is.
+        assert renamed["classification"]["requires_confirmation"] is True
+        assert renamed["classification"]["display_category"] is None
