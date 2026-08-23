@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
+import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -55,6 +55,18 @@ export const updateFinancialStatementFinancialStatementPut = <ThrowOnError exten
  */
 export const previewFinancialStatementFinancialStatementPreviewPost = <ThrowOnError extends boolean = false>(options: Options<PreviewFinancialStatementFinancialStatementPreviewPostData, ThrowOnError>) => (options.client ?? client).post<PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewFinancialStatementFinancialStatementPreviewPostErrors, ThrowOnError>({
     url: '/financial-statement/preview',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Confirm Financial Statement
+ */
+export const confirmFinancialStatementFinancialStatementConfirmPost = <ThrowOnError extends boolean = false>(options: Options<ConfirmFinancialStatementFinancialStatementConfirmPostData, ThrowOnError>) => (options.client ?? client).post<ConfirmFinancialStatementFinancialStatementConfirmPostResponses, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ThrowOnError>({
+    url: '/financial-statement/confirm',
     ...options,
     headers: {
         'Content-Type': 'application/json',

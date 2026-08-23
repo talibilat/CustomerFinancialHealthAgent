@@ -8,17 +8,20 @@ import {
   previewFinancialStatementFinancialStatementPreviewPost,
   retrieveFinancialStatementFinancialStatementGet,
   updateFinancialStatementFinancialStatementPut,
+  confirmFinancialStatementFinancialStatementConfirmPost,
 } from '@/api/generated'
 
 vi.mock('@/api/generated', () => ({
   retrieveFinancialStatementFinancialStatementGet: vi.fn(),
   updateFinancialStatementFinancialStatementPut: vi.fn(),
   previewFinancialStatementFinancialStatementPreviewPost: vi.fn(),
+  confirmFinancialStatementFinancialStatementConfirmPost: vi.fn(),
 }))
 
 const retrieve = vi.mocked(retrieveFinancialStatementFinancialStatementGet)
 const update = vi.mocked(updateFinancialStatementFinancialStatementPut)
 const preview = vi.mocked(previewFinancialStatementFinancialStatementPreviewPost)
+const confirmStatement = vi.mocked(confirmFinancialStatementFinancialStatementConfirmPost)
 
 type ClassificationFixture = {
   display_category: string | null
@@ -104,6 +107,7 @@ beforeEach(() => {
   retrieve.mockReset()
   update.mockReset()
   preview.mockReset()
+  confirmStatement.mockReset()
   retrieve.mockResolvedValue(ok(statementResponse()))
 })
 
@@ -163,7 +167,7 @@ describe('StatementEditor', () => {
     await userEvent.type(wages, '3000.00')
     await userEvent.click(screen.getByRole('button', { name: /preview/i }))
 
-    expect(await screen.findByText('£1,530.00')).toBeInTheDocument()
+    expect((await screen.findAllByText('£1,530.00')).length).toBeGreaterThan(0)
     expect(
       screen.getByText(/nothing has been saved and your confirmed history has not changed/i),
     ).toBeInTheDocument()
@@ -199,7 +203,7 @@ describe('StatementEditor', () => {
     renderEditor()
     const wages = await amountField(/wages amount/i)
     await userEvent.click(screen.getByRole('button', { name: /preview/i }))
-    expect(await screen.findByText('£1,530.00')).toBeInTheDocument()
+    expect((await screen.findAllByText('£1,530.00')).length).toBeGreaterThan(0)
 
     await userEvent.clear(wages)
     await userEvent.type(wages, '3100.00')
@@ -442,7 +446,7 @@ describe('StatementEditor', () => {
     await amountField(/wages amount/i)
     await userEvent.click(screen.getByRole('button', { name: /preview/i }))
 
-    await screen.findByText('£980.00')
+    await screen.findAllByText('£980.00')
     const bodyText = document.body.textContent ?? ''
 
     expect(bodyText).not.toMatch(/you can afford/i)
@@ -659,5 +663,134 @@ describe('StatementEditor classification', () => {
     expect(document.querySelector(link.getAttribute('href') as string)).toBe(
       screen.getByRole('combobox', { name: /food and housekeeping category/i }),
     )
+  })
+})
+
+describe('StatementEditor confirmation', () => {
+  const previewPayload = (overrides = {}) => ({
+    calculation_policy_version: 'normalization-policy-v1',
+    normalized_monthly_income: '2450.00',
+    normalized_monthly_outgoings: '1518.75',
+    monthly_headroom: '931.25',
+    result_code: 'surplus',
+    warnings: [],
+    normalized_monthly_repayment_commitments: '0.00',
+    normalized_monthly_irregular_costs: '0.00',
+    normalized_monthly_protected_future_provisions: '0.00',
+    expected_changes: [],
+    resilience: {
+      accessible_savings: null,
+      protected_reserve: null,
+      current_account_balance: null,
+      known_arrears: null,
+      savings_above_reserve: null,
+      reserve_gap: null,
+      result_code: null,
+      warnings: [],
+    },
+    unresolved_classifications: [],
+    can_confirm: true,
+    ...overrides,
+  })
+
+  async function previewThen(overrides = {}) {
+    preview.mockResolvedValue(ok(previewPayload(overrides)))
+    renderEditor()
+    await screen.findByRole('textbox', { name: /wages amount/i })
+    await userEvent.click(screen.getByRole('button', { name: /preview/i }))
+    await screen.findAllByText('£931.25')
+  }
+
+  it('offers confirmation only after a preview', async () => {
+    renderEditor()
+    await screen.findByRole('textbox', { name: /wages amount/i })
+
+    expect(screen.queryByRole('button', { name: /confirm this statement/i })).not.toBeInTheDocument()
+  })
+
+  it('withholds confirmation while an outgoing still needs the customer', async () => {
+    await previewThen({ unresolved_classifications: ['o2'], can_confirm: false })
+
+    expect(screen.getByRole('button', { name: /confirm this statement/i })).toBeDisabled()
+    expect(screen.getByText(/tell us what each outgoing was for/i)).toBeInTheDocument()
+  })
+
+  it('requires the customer to say they checked the information', async () => {
+    await previewThen()
+
+    expect(screen.getByRole('button', { name: /confirm this statement/i })).toBeDisabled()
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /checked this information/i }))
+
+    expect(screen.getByRole('button', { name: /confirm this statement/i })).toBeEnabled()
+  })
+
+  it('never claims the information was independently verified', async () => {
+    await previewThen()
+
+    const bodyText = document.body.textContent ?? ''
+    expect(bodyText).not.toMatch(/verified/i)
+    expect(bodyText).toMatch(/believe it reflects/i)
+  })
+
+  it('confirms once and explains that corrections create new snapshots', async () => {
+    confirmStatement.mockResolvedValue(
+      ok({
+        snapshot_id: 'snap-1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-24T10:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        taxonomy_version: 'outgoing-taxonomy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1518.75',
+        monthly_headroom: '931.25',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: previewPayload().resilience,
+      }),
+    )
+    await previewThen()
+    await userEvent.click(screen.getByRole('checkbox', { name: /checked this information/i }))
+
+    await userEvent.click(screen.getByRole('button', { name: /confirm this statement/i }))
+
+    expect(await screen.findByText(/this statement is saved to your history/i)).toBeInTheDocument()
+    expect(screen.getByText(/corrections create a new snapshot/i)).toBeInTheDocument()
+  })
+
+  it('a double click sends one confirmation with one reference', async () => {
+    let resolveConfirm: (value: unknown) => void = () => {}
+    confirmStatement.mockReturnValue(
+      new Promise((resolve) => {
+        resolveConfirm = resolve
+      }) as never,
+    )
+    await previewThen()
+    await userEvent.click(screen.getByRole('checkbox', { name: /checked this information/i }))
+
+    const button = screen.getByRole('button', { name: /confirm this statement/i })
+    await userEvent.click(button)
+    await userEvent.click(button)
+
+    expect(confirmStatement).toHaveBeenCalledTimes(1)
+    resolveConfirm(ok({ snapshot_id: 'snap-1' }))
+  })
+
+  it('explains a version conflict without losing what was entered', async () => {
+    confirmStatement.mockResolvedValue(
+      failure(409, {
+        code: 'statement_version_conflict',
+        message: 'This statement changed. Preview it again before confirming.',
+        current_version: 2,
+      }),
+    )
+    await previewThen()
+    await userEvent.click(screen.getByRole('checkbox', { name: /checked this information/i }))
+    await userEvent.click(screen.getByRole('button', { name: /confirm this statement/i }))
+
+    expect(await screen.findByText(/preview it again before confirming/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: /wages amount/i })).toHaveValue('2450.00')
   })
 })

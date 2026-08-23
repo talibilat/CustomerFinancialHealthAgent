@@ -55,6 +55,61 @@ export type ClassificationOut = {
 };
 
 /**
+ * ConfirmedSnapshotResponse
+ */
+export type ConfirmedSnapshotResponse = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Confirmed At
+     */
+    confirmed_at: string;
+    /**
+     * Calculation Policy Version
+     */
+    calculation_policy_version: string;
+    /**
+     * Taxonomy Version
+     */
+    taxonomy_version: string;
+    /**
+     * Normalized Monthly Income
+     */
+    normalized_monthly_income: string;
+    /**
+     * Normalized Monthly Outgoings
+     */
+    normalized_monthly_outgoings: string;
+    /**
+     * Monthly Headroom
+     */
+    monthly_headroom: string;
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Income Entries
+     */
+    income_entries: Array<StatementEntryOut>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries: Array<StatementEntryOut>;
+    resilience: ResilienceOut;
+};
+
+/**
  * EditableStatementOut
  */
 export type EditableStatementOut = {
@@ -350,6 +405,44 @@ export type ResilienceSectionOut = {
      * Known Arrears
      */
     known_arrears: string | null;
+};
+
+/**
+ * StatementConfirmationRequest
+ *
+ * A submission the customer is asking to record permanently.
+ */
+export type StatementConfirmationRequest = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Income Entries
+     */
+    income_entries?: Array<StatementEntryIn>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries?: Array<StatementEntryIn>;
+    /**
+     * Repayment Commitments
+     */
+    repayment_commitments?: Array<StatementEntryIn>;
+    resilience?: ResilienceIn;
+    looking_ahead?: LookingAheadIn;
+    /**
+     * Expected Version
+     */
+    expected_version: number;
+    /**
+     * Checked Information
+     */
+    checked_information?: boolean;
 };
 
 /**
@@ -682,3 +775,34 @@ export type PreviewFinancialStatementFinancialStatementPreviewPostResponses = {
 };
 
 export type PreviewFinancialStatementFinancialStatementPreviewPostResponse = PreviewFinancialStatementFinancialStatementPreviewPostResponses[keyof PreviewFinancialStatementFinancialStatementPreviewPostResponses];
+
+export type ConfirmFinancialStatementFinancialStatementConfirmPostData = {
+    body: StatementConfirmationRequest;
+    headers: {
+        /**
+         * Idempotency-Key
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/financial-statement/confirm';
+};
+
+export type ConfirmFinancialStatementFinancialStatementConfirmPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ConfirmFinancialStatementFinancialStatementConfirmPostError = ConfirmFinancialStatementFinancialStatementConfirmPostErrors[keyof ConfirmFinancialStatementFinancialStatementConfirmPostErrors];
+
+export type ConfirmFinancialStatementFinancialStatementConfirmPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: ConfirmedSnapshotResponse;
+};
+
+export type ConfirmFinancialStatementFinancialStatementConfirmPostResponse = ConfirmFinancialStatementFinancialStatementConfirmPostResponses[keyof ConfirmFinancialStatementFinancialStatementConfirmPostResponses];

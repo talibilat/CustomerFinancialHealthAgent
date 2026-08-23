@@ -13,6 +13,7 @@ The first tracer-bullet slice is implemented and verified: Docker Compose starts
 Financial resilience is also implemented: the overview separately shows accessible savings, protected reserve, current-account balance, and known arrears, with a below/at/above-reserve result that never changes the monthly cash-flow figures above it.
 Outgoings are classified deterministically: a customer's own remembered correction wins, then global whole-phrase rules, and anything unknown or ambiguous is left for the customer rather than guessed. Azure OpenAI is not involved.
 The update flow is implemented as well: the customer can review and change their editable financial statement, add and remove income, outgoings, existing repayment commitments, irregular costs, and protected future provisions, supply or omit resilience information, and preview the recalculated position without confirming anything or changing history.
+A reviewed statement can be confirmed as an immutable snapshot in one atomic transaction, with a retry or double-click returning the original record rather than duplicating history.
 Unusable values are refused against their own field, an invalid submission preserves everything entered and states that nothing was saved, and a submission built from a superseded version returns a conflict the customer can refresh from.
 The frontend uses Tailwind CSS and shadcn/ui components.
 Later journey steps below (classification, snapshot confirmation, history, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
@@ -89,7 +90,7 @@ cd ../frontend && npm run generate-client
 5. **Done.** Enter an unusable amount such as a negative number, a blank, or `NaN`. Every invalid field is listed in an error summary that takes focus and links back to the control, everything already entered is preserved, and the response says nothing was saved.
 6. **Done.** See each outgoing classified deterministically. Rent, food, and communications resolve from global rules with no provider involved.
 7. **Done.** Add an ambiguous outgoing such as `Apple`. It refuses to guess, asks what it was for, and can remember the answer so the same wording resolves next time regardless of case, spacing, or punctuation.
-8. Planned: confirm a new immutable snapshot.
+8. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
 9. Planned: inspect the updated history and deterministic change explanation.
 10. Planned: explore and save a repayment scenario without modifying the statement.
 11. Planned: request an optional personalized explanation.
