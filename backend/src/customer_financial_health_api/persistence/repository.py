@@ -1,3 +1,5 @@
+import hashlib
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -8,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.domain.financial_health import (
+    calculate_monthly_position,
+    calculate_resilience,
     CurrentPositionResultCode,
     Frequency,
     MoneyEntry,
@@ -40,6 +44,7 @@ from customer_financial_health_api.persistence.models import (
     EditableStatementEntry,
     EditableStatementExpectedChange,
     CustomerClassificationPreference,
+    ConfirmationIdempotencyKey,
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
 )
@@ -483,3 +488,172 @@ def save_customer_preference(
         stored.taxonomy_version = TAXONOMY_VERSION
 
     session.flush()
+
+
+class IdempotencyConflict(Exception):
+    """Raised when an idempotency key is reused for a materially different request."""
+
+
+class UnresolvedClassifications(Exception):
+    """Raised when confirmation is attempted while outgoings still need the customer."""
+
+    def __init__(self, entry_ids: Sequence[str]):
+        self.entry_ids: tuple[str, ...] = tuple(entry_ids)
+        super().__init__(f"{len(self.entry_ids)} outgoing(s) still need a confirmed classification")
+
+
+def _confirmation_fingerprint(
+    statement: FinancialStatement, classifications: dict[str, ClassificationOutcome]
+) -> str:
+    """A stable digest of what is being confirmed.
+
+    Two requests with the same reported values and the same settled meanings
+    are the same confirmation; anything else is a different one.
+    """
+    def entries(section: Sequence[StatementEntry]) -> list:
+        return [
+            [entry.entry_id, entry.description, str(entry.amount), entry.frequency.value]
+            for entry in section
+        ]
+
+    payload = {
+        "statement_period": statement.statement_period.isoformat(),
+        "currency": statement.currency,
+        "income": entries(statement.income_entries),
+        "outgoings": entries(statement.outgoing_entries),
+        "commitments": entries(statement.repayment_commitments),
+        "resilience": [
+            str(statement.resilience.accessible_savings),
+            str(statement.resilience.protected_reserve),
+            str(statement.resilience.current_account_balance),
+            str(statement.resilience.known_arrears),
+        ],
+        "classifications": sorted(
+            [
+                entry_id,
+                outcome.display_category.value if outcome.display_category else None,
+                outcome.outgoing_treatment.value if outcome.outgoing_treatment else None,
+            ]
+            for entry_id, outcome in classifications.items()
+        ),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _record_idempotent_confirmation(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    idempotency_key: str,
+    fingerprint: str,
+    snapshot_id: uuid.UUID,
+) -> None:
+    session.add(
+        ConfirmationIdempotencyKey(
+            customer_id=customer_id,
+            idempotency_key=idempotency_key,
+            request_fingerprint=fingerprint,
+            snapshot_id=snapshot_id,
+        )
+    )
+    session.flush()
+
+
+def confirm_statement(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    statement: FinancialStatement,
+    classifications: dict[str, ClassificationOutcome],
+    expected_version: int,
+    idempotency_key: str,
+    confirmed_at: datetime,
+) -> ConfirmedSnapshotView:
+    """Turn the editable statement into an immutable snapshot, atomically.
+
+    The caller owns the transaction: everything here either commits together or
+    rolls back together. A repeat of the same request returns the snapshot the
+    first attempt created rather than writing a second one.
+    """
+    fingerprint = _confirmation_fingerprint(statement, classifications)
+
+    # A replay of an identical request returns the original result. The same key
+    # carrying a different request is a conflict, not a replay.
+    existing = session.execute(
+        select(ConfirmationIdempotencyKey).where(
+            ConfirmationIdempotencyKey.customer_id == customer_id,
+            ConfirmationIdempotencyKey.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different confirmation"
+            )
+        original = session.get(ConfirmedSnapshot, existing.snapshot_id)
+        return _to_view(original)
+
+    # Lock the editable statement so a concurrent confirmation cannot pass the
+    # same version check, then refuse anything built from stale data.
+    stored = session.execute(
+        select(EditableFinancialStatement)
+        .where(
+            EditableFinancialStatement.customer_id == customer_id,
+            EditableFinancialStatement.statement_period == statement.statement_period,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    current_version = stored.version if stored is not None else 0
+    if current_version != expected_version:
+        raise StaleStatementVersion(expected=expected_version, current=current_version)
+
+    unresolved = [
+        entry.entry_id
+        for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments)
+        if not (
+            entry.entry_id in classifications and classifications[entry.entry_id].is_resolved
+        )
+    ]
+    if unresolved:
+        raise UnresolvedClassifications(unresolved)
+
+    outgoings = list(statement.outgoing_entries) + list(statement.repayment_commitments)
+    position = calculate_monthly_position(
+        income_entries=[entry.as_money_entry() for entry in statement.income_entries],
+        outgoing_entries=[entry.as_money_entry() for entry in outgoings],
+    )
+    resilience = calculate_resilience(
+        accessible_savings=statement.resilience.accessible_savings,
+        protected_reserve=statement.resilience.protected_reserve,
+        current_account_balance=statement.resilience.current_account_balance,
+        known_arrears=statement.resilience.known_arrears,
+    )
+
+    snapshot = save_confirmed_snapshot(
+        session,
+        customer_id=customer_id,
+        statement_period=statement.statement_period,
+        confirmed_at=confirmed_at,
+        position=position,
+        income_entries=list(statement.income_entries),
+        outgoing_entries=outgoings,
+        resilience=resilience,
+        classifications=classifications,
+    )
+
+    # Advancing the version retires the draft this snapshot was built from, so a
+    # second confirmation of the same version cannot follow it.
+    if stored is not None:
+        stored.version += 1
+
+    _record_idempotent_confirmation(
+        session,
+        customer_id=customer_id,
+        idempotency_key=idempotency_key,
+        fingerprint=fingerprint,
+        snapshot_id=snapshot.id,
+    )
+
+    return _to_view(snapshot)

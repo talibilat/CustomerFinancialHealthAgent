@@ -162,6 +162,31 @@ class EditableStatementEntry(Base):
     )
 
 
+class ConfirmationIdempotencyKey(Base):
+    """One customer's confirmation attempt, recorded so a retry cannot duplicate history.
+
+    The fingerprint distinguishes a genuine retry of the same request from a
+    different request that happens to reuse the key.
+    """
+
+    __tablename__ = "confirmation_idempotency_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "idempotency_key", name="uq_idempotency_customer_key"),
+    )
+
+
 class CustomerClassificationPreference(Base):
     """A classification rule the customer created by correcting a suggestion.
 
