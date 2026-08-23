@@ -224,6 +224,9 @@ class SnapshotIncomeEntry(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Nullable so the migration is safe against snapshots confirmed before
+    # descriptions were recorded; every new confirmation sets it.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     original_frequency: Mapped[str] = mapped_column(String, nullable=False)
     normalized_monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
@@ -241,6 +244,13 @@ class SnapshotOutgoingEntry(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Nullable so the migration is safe against snapshots confirmed before
+    # these were recorded; every new confirmation sets them.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_category: Mapped[str | None] = mapped_column(String, nullable=True)
+    outgoing_treatment: Mapped[str | None] = mapped_column(String, nullable=True)
+    classification_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    taxonomy_version: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     original_frequency: Mapped[str] = mapped_column(String, nullable=False)
     normalized_monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)

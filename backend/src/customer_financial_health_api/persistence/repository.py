@@ -57,6 +57,11 @@ class SnapshotEntryView:
     original_amount: Decimal
     original_frequency: Frequency
     normalized_monthly_amount: Decimal
+    description: str | None = None
+    display_category: DisplayCategory | None = None
+    outgoing_treatment: OutgoingTreatment | None = None
+    classification_source: ClassificationSource | None = None
+    taxonomy_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,16 +114,32 @@ def get_demo_customer(session: Session) -> Customer | None:
     return session.execute(stmt).scalar_one_or_none()
 
 
-def _entry_rows(entries: Sequence[MoneyEntry], position_amounts: Sequence[Decimal], row_type):
-    return [
-        row_type(
+def _entry_rows(
+    entries: Sequence,
+    position_amounts: Sequence[Decimal],
+    row_type,
+    classifications: dict[str, ClassificationOutcome] | None = None,
+):
+    resolved = classifications or {}
+    rows = []
+    for index, (entry, normalized_amount) in enumerate(zip(entries, position_amounts)):
+        row = row_type(
             original_amount=entry.amount,
             original_frequency=entry.frequency.value,
             normalized_monthly_amount=normalized_amount,
             sort_order=index,
         )
-        for index, (entry, normalized_amount) in enumerate(zip(entries, position_amounts))
-    ]
+        # StatementEntry carries the customer's own label; MoneyEntry does not.
+        row.description = getattr(entry, "description", None)
+
+        classification = resolved.get(getattr(entry, "entry_id", None))
+        if classification is not None and classification.is_resolved and hasattr(row, "display_category"):
+            row.display_category = classification.display_category.value
+            row.outgoing_treatment = classification.outgoing_treatment.value
+            row.classification_source = classification.source.value
+            row.taxonomy_version = classification.taxonomy_version
+        rows.append(row)
+    return rows
 
 
 def save_confirmed_snapshot(
@@ -131,6 +152,7 @@ def save_confirmed_snapshot(
     income_entries: Sequence[MoneyEntry],
     outgoing_entries: Sequence[MoneyEntry],
     resilience: ResilienceResult,
+    classifications: dict[str, ClassificationOutcome] | None = None,
     supersedes_snapshot_id: uuid.UUID | None = None,
 ) -> ConfirmedSnapshot:
     income_normalized = [normalize_to_monthly(e.amount, e.frequency) for e in income_entries]
@@ -148,7 +170,9 @@ def save_confirmed_snapshot(
         warnings=list(position.warnings),
         supersedes_snapshot_id=supersedes_snapshot_id,
         income_entries=_entry_rows(income_entries, income_normalized, SnapshotIncomeEntry),
-        outgoing_entries=_entry_rows(outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry),
+        outgoing_entries=_entry_rows(
+            outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry, classifications
+        ),
         current_account_balance=resilience.current_account_balance,
         accessible_savings=resilience.accessible_savings,
         protected_reserve=resilience.protected_reserve,
@@ -180,6 +204,7 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
+                description=e.description,
             )
             for e in snapshot.income_entries
         ),
@@ -188,6 +213,19 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
+                description=e.description,
+                display_category=(
+                    DisplayCategory(e.display_category) if e.display_category else None
+                ),
+                outgoing_treatment=(
+                    OutgoingTreatment(e.outgoing_treatment) if e.outgoing_treatment else None
+                ),
+                classification_source=(
+                    ClassificationSource(e.classification_source)
+                    if e.classification_source
+                    else None
+                ),
+                taxonomy_version=e.taxonomy_version,
             )
             for e in snapshot.outgoing_entries
         ),
