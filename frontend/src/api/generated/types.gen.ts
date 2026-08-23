@@ -5,6 +5,56 @@ export type ClientOptions = {
 };
 
 /**
+ * ClassificationIn
+ *
+ * What the customer accepted or corrected for one outgoing.
+ */
+export type ClassificationIn = {
+    /**
+     * Display Category
+     */
+    display_category: string;
+    /**
+     * Outgoing Treatment
+     */
+    outgoing_treatment: string;
+    /**
+     * Remember
+     */
+    remember?: boolean;
+};
+
+/**
+ * ClassificationOut
+ */
+export type ClassificationOut = {
+    /**
+     * Display Category
+     */
+    display_category: string | null;
+    /**
+     * Outgoing Treatment
+     */
+    outgoing_treatment: string | null;
+    /**
+     * Source
+     */
+    source: string | null;
+    /**
+     * Taxonomy Version
+     */
+    taxonomy_version: string;
+    /**
+     * Requires Confirmation
+     */
+    requires_confirmation: boolean;
+    /**
+     * Reason Code
+     */
+    reason_code: string | null;
+};
+
+/**
  * EditableStatementOut
  */
 export type EditableStatementOut = {
@@ -322,6 +372,7 @@ export type StatementEntryIn = {
      * Frequency
      */
     frequency: string;
+    classification?: ClassificationIn | null;
 };
 
 /**
@@ -348,6 +399,7 @@ export type StatementEntryOut = {
      * Normalized Monthly Amount
      */
     normalized_monthly_amount: string;
+    classification?: ClassificationOut | null;
 };
 
 /**
@@ -395,6 +447,14 @@ export type StatementPreviewResponse = {
      */
     expected_changes: Array<ExpectedChangeOut>;
     resilience: ResilienceOut;
+    /**
+     * Unresolved Classifications
+     */
+    unresolved_classifications: Array<string>;
+    /**
+     * Can Confirm
+     */
+    can_confirm: boolean;
 };
 
 /**
