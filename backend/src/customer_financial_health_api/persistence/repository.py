@@ -1,3 +1,5 @@
+import hashlib
+import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -8,6 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.domain.financial_health import (
+    calculate_monthly_position,
+    calculate_resilience,
     CurrentPositionResultCode,
     Frequency,
     MoneyEntry,
@@ -40,6 +44,7 @@ from customer_financial_health_api.persistence.models import (
     EditableStatementEntry,
     EditableStatementExpectedChange,
     CustomerClassificationPreference,
+    ConfirmationIdempotencyKey,
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
 )
@@ -57,6 +62,11 @@ class SnapshotEntryView:
     original_amount: Decimal
     original_frequency: Frequency
     normalized_monthly_amount: Decimal
+    description: str | None = None
+    display_category: DisplayCategory | None = None
+    outgoing_treatment: OutgoingTreatment | None = None
+    classification_source: ClassificationSource | None = None
+    taxonomy_version: str | None = None
 
 
 @dataclass(frozen=True)
@@ -109,16 +119,32 @@ def get_demo_customer(session: Session) -> Customer | None:
     return session.execute(stmt).scalar_one_or_none()
 
 
-def _entry_rows(entries: Sequence[MoneyEntry], position_amounts: Sequence[Decimal], row_type):
-    return [
-        row_type(
+def _entry_rows(
+    entries: Sequence,
+    position_amounts: Sequence[Decimal],
+    row_type,
+    classifications: dict[str, ClassificationOutcome] | None = None,
+):
+    resolved = classifications or {}
+    rows = []
+    for index, (entry, normalized_amount) in enumerate(zip(entries, position_amounts)):
+        row = row_type(
             original_amount=entry.amount,
             original_frequency=entry.frequency.value,
             normalized_monthly_amount=normalized_amount,
             sort_order=index,
         )
-        for index, (entry, normalized_amount) in enumerate(zip(entries, position_amounts))
-    ]
+        # StatementEntry carries the customer's own label; MoneyEntry does not.
+        row.description = getattr(entry, "description", None)
+
+        classification = resolved.get(getattr(entry, "entry_id", None))
+        if classification is not None and classification.is_resolved and hasattr(row, "display_category"):
+            row.display_category = classification.display_category.value
+            row.outgoing_treatment = classification.outgoing_treatment.value
+            row.classification_source = classification.source.value
+            row.taxonomy_version = classification.taxonomy_version
+        rows.append(row)
+    return rows
 
 
 def save_confirmed_snapshot(
@@ -131,6 +157,7 @@ def save_confirmed_snapshot(
     income_entries: Sequence[MoneyEntry],
     outgoing_entries: Sequence[MoneyEntry],
     resilience: ResilienceResult,
+    classifications: dict[str, ClassificationOutcome] | None = None,
     supersedes_snapshot_id: uuid.UUID | None = None,
 ) -> ConfirmedSnapshot:
     income_normalized = [normalize_to_monthly(e.amount, e.frequency) for e in income_entries]
@@ -148,7 +175,9 @@ def save_confirmed_snapshot(
         warnings=list(position.warnings),
         supersedes_snapshot_id=supersedes_snapshot_id,
         income_entries=_entry_rows(income_entries, income_normalized, SnapshotIncomeEntry),
-        outgoing_entries=_entry_rows(outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry),
+        outgoing_entries=_entry_rows(
+            outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry, classifications
+        ),
         current_account_balance=resilience.current_account_balance,
         accessible_savings=resilience.accessible_savings,
         protected_reserve=resilience.protected_reserve,
@@ -180,6 +209,7 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
+                description=e.description,
             )
             for e in snapshot.income_entries
         ),
@@ -188,6 +218,19 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
+                description=e.description,
+                display_category=(
+                    DisplayCategory(e.display_category) if e.display_category else None
+                ),
+                outgoing_treatment=(
+                    OutgoingTreatment(e.outgoing_treatment) if e.outgoing_treatment else None
+                ),
+                classification_source=(
+                    ClassificationSource(e.classification_source)
+                    if e.classification_source
+                    else None
+                ),
+                taxonomy_version=e.taxonomy_version,
             )
             for e in snapshot.outgoing_entries
         ),
@@ -445,3 +488,172 @@ def save_customer_preference(
         stored.taxonomy_version = TAXONOMY_VERSION
 
     session.flush()
+
+
+class IdempotencyConflict(Exception):
+    """Raised when an idempotency key is reused for a materially different request."""
+
+
+class UnresolvedClassifications(Exception):
+    """Raised when confirmation is attempted while outgoings still need the customer."""
+
+    def __init__(self, entry_ids: Sequence[str]):
+        self.entry_ids: tuple[str, ...] = tuple(entry_ids)
+        super().__init__(f"{len(self.entry_ids)} outgoing(s) still need a confirmed classification")
+
+
+def _confirmation_fingerprint(
+    statement: FinancialStatement, classifications: dict[str, ClassificationOutcome]
+) -> str:
+    """A stable digest of what is being confirmed.
+
+    Two requests with the same reported values and the same settled meanings
+    are the same confirmation; anything else is a different one.
+    """
+    def entries(section: Sequence[StatementEntry]) -> list:
+        return [
+            [entry.entry_id, entry.description, str(entry.amount), entry.frequency.value]
+            for entry in section
+        ]
+
+    payload = {
+        "statement_period": statement.statement_period.isoformat(),
+        "currency": statement.currency,
+        "income": entries(statement.income_entries),
+        "outgoings": entries(statement.outgoing_entries),
+        "commitments": entries(statement.repayment_commitments),
+        "resilience": [
+            str(statement.resilience.accessible_savings),
+            str(statement.resilience.protected_reserve),
+            str(statement.resilience.current_account_balance),
+            str(statement.resilience.known_arrears),
+        ],
+        "classifications": sorted(
+            [
+                entry_id,
+                outcome.display_category.value if outcome.display_category else None,
+                outcome.outgoing_treatment.value if outcome.outgoing_treatment else None,
+            ]
+            for entry_id, outcome in classifications.items()
+        ),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _record_idempotent_confirmation(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    idempotency_key: str,
+    fingerprint: str,
+    snapshot_id: uuid.UUID,
+) -> None:
+    session.add(
+        ConfirmationIdempotencyKey(
+            customer_id=customer_id,
+            idempotency_key=idempotency_key,
+            request_fingerprint=fingerprint,
+            snapshot_id=snapshot_id,
+        )
+    )
+    session.flush()
+
+
+def confirm_statement(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    statement: FinancialStatement,
+    classifications: dict[str, ClassificationOutcome],
+    expected_version: int,
+    idempotency_key: str,
+    confirmed_at: datetime,
+) -> ConfirmedSnapshotView:
+    """Turn the editable statement into an immutable snapshot, atomically.
+
+    The caller owns the transaction: everything here either commits together or
+    rolls back together. A repeat of the same request returns the snapshot the
+    first attempt created rather than writing a second one.
+    """
+    fingerprint = _confirmation_fingerprint(statement, classifications)
+
+    # A replay of an identical request returns the original result. The same key
+    # carrying a different request is a conflict, not a replay.
+    existing = session.execute(
+        select(ConfirmationIdempotencyKey).where(
+            ConfirmationIdempotencyKey.customer_id == customer_id,
+            ConfirmationIdempotencyKey.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different confirmation"
+            )
+        original = session.get(ConfirmedSnapshot, existing.snapshot_id)
+        return _to_view(original)
+
+    # Lock the editable statement so a concurrent confirmation cannot pass the
+    # same version check, then refuse anything built from stale data.
+    stored = session.execute(
+        select(EditableFinancialStatement)
+        .where(
+            EditableFinancialStatement.customer_id == customer_id,
+            EditableFinancialStatement.statement_period == statement.statement_period,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    current_version = stored.version if stored is not None else 0
+    if current_version != expected_version:
+        raise StaleStatementVersion(expected=expected_version, current=current_version)
+
+    unresolved = [
+        entry.entry_id
+        for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments)
+        if not (
+            entry.entry_id in classifications and classifications[entry.entry_id].is_resolved
+        )
+    ]
+    if unresolved:
+        raise UnresolvedClassifications(unresolved)
+
+    outgoings = list(statement.outgoing_entries) + list(statement.repayment_commitments)
+    position = calculate_monthly_position(
+        income_entries=[entry.as_money_entry() for entry in statement.income_entries],
+        outgoing_entries=[entry.as_money_entry() for entry in outgoings],
+    )
+    resilience = calculate_resilience(
+        accessible_savings=statement.resilience.accessible_savings,
+        protected_reserve=statement.resilience.protected_reserve,
+        current_account_balance=statement.resilience.current_account_balance,
+        known_arrears=statement.resilience.known_arrears,
+    )
+
+    snapshot = save_confirmed_snapshot(
+        session,
+        customer_id=customer_id,
+        statement_period=statement.statement_period,
+        confirmed_at=confirmed_at,
+        position=position,
+        income_entries=list(statement.income_entries),
+        outgoing_entries=outgoings,
+        resilience=resilience,
+        classifications=classifications,
+    )
+
+    # Advancing the version retires the draft this snapshot was built from, so a
+    # second confirmation of the same version cannot follow it.
+    if stored is not None:
+        stored.version += 1
+
+    _record_idempotent_confirmation(
+        session,
+        customer_id=customer_id,
+        idempotency_key=idempotency_key,
+        fingerprint=fingerprint,
+        snapshot_id=snapshot.id,
+    )
+
+    return _to_view(snapshot)

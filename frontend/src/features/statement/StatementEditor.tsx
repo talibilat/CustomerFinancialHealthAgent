@@ -3,11 +3,13 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Info, Plus, Trash2 } from 'lucide-react'
 
 import {
+  confirmFinancialStatementFinancialStatementConfirmPost,
   previewFinancialStatementFinancialStatementPreviewPost,
   retrieveFinancialStatementFinancialStatementGet,
   updateFinancialStatementFinancialStatementPut,
 } from '@/api/generated'
 import type {
+  ConfirmedSnapshotResponse,
   EditableStatementResponse,
   StatementEntryOut,
   StatementPreviewResponse,
@@ -753,6 +755,12 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
   const [conflictMessage, setConflictMessage] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [preview, setPreview] = useState<StatementPreviewResponse | null>(null)
+  const [checkedInformation, setCheckedInformation] = useState(false)
+  const [confirmed, setConfirmed] = useState<ConfirmedSnapshotResponse | null>(null)
+  const [confirmConflict, setConfirmConflict] = useState<string | null>(null)
+  // One reference per previewed statement, so a retry or a double click is
+  // recognised as the same confirmation rather than a second one.
+  const idempotencyKey = useRef<string>('')
   const summaryRef = useRef<HTMLDivElement | null>(null)
 
   const query = useQuery({
@@ -805,6 +813,10 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
     },
     onSuccess: (data) => {
       setPreview(data)
+      idempotencyKey.current = `confirm-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
+      setCheckedInformation(false)
+      setConfirmed(null)
+      setConfirmConflict(null)
       setStatus('Preview updated. Nothing has been saved.')
     },
   })
@@ -831,6 +843,38 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       setVersion(data.version)
       setPreview(null)
       setStatus('Your statement was saved.')
+    },
+  })
+
+  const confirmMutation = useMutation({
+    mutationFn: async () => {
+      const result = await confirmFinancialStatementFinancialStatementConfirmPost({
+        body: {
+          ...toSubmission(activeDraft as Draft, statementPeriod),
+          expected_version: version,
+          checked_information: true,
+        } as never,
+        headers: { 'Idempotency-Key': idempotencyKey.current },
+      })
+      if (result.error || !result.data) {
+        const detail = (result.error as { detail?: unknown })?.detail
+        const body = (detail ?? {}) as { code?: string; message?: string; errors?: FieldError[] }
+        if (body.code === 'statement_version_conflict' || body.code === 'classifications_unresolved') {
+          setConfirmConflict(body.message ?? 'This statement changed. Preview it again before confirming.')
+        } else {
+          applyRejection(detail, result.response?.status ?? 0)
+        }
+        throw new Error('confirm_rejected')
+      }
+      return result.data as ConfirmedSnapshotResponse
+    },
+    onMutate: () => {
+      setConfirmConflict(null)
+      setStatus(null)
+    },
+    onSuccess: (data) => {
+      setConfirmed(data)
+      setStatus('Your statement was saved to your history.')
     },
   })
 
@@ -1063,6 +1107,129 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       </Card>
 
       {preview && <PreviewPanel preview={preview} />}
+
+      {preview && (
+        <ConfirmationPanel
+          preview={preview}
+          checked={checkedInformation}
+          onCheckedChange={setCheckedInformation}
+          onConfirm={() => confirmMutation.mutate()}
+          pending={confirmMutation.isPending}
+          conflictMessage={confirmConflict}
+          confirmed={confirmed}
+        />
+      )}
     </div>
+  )
+}
+
+function ConfirmationPanel({
+  preview,
+  checked,
+  onCheckedChange,
+  onConfirm,
+  pending,
+  conflictMessage,
+  confirmed,
+}: {
+  preview: StatementPreviewResponse
+  checked: boolean
+  onCheckedChange: (next: boolean) => void
+  onConfirm: () => void
+  pending: boolean
+  conflictMessage: string | null
+  confirmed: ConfirmedSnapshotResponse | null
+}) {
+  const unresolved = (preview.unresolved_classifications ?? []).length > 0
+
+  if (confirmed) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">This statement is saved to your history</CardTitle>
+          <CardDescription>
+            Confirmed {new Date(confirmed.confirmed_at).toLocaleString('en-GB')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <p className="text-sm text-muted-foreground">Monthly headroom</p>
+            <p className="text-3xl font-semibold tracking-tight">
+              {formatGbp(confirmed.monthly_headroom)}
+            </p>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            This record does not change. If something here turns out to be wrong, corrections
+            create a new snapshot and the original stays in your history.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Save this to your history</CardTitle>
+        <CardDescription>
+          Once saved, this record does not change. Corrections create a new snapshot later.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <dt className="text-sm text-muted-foreground">Income</dt>
+            <dd className="text-lg font-medium">
+              {formatGbp(preview.normalized_monthly_income)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Outgoings</dt>
+            <dd className="text-lg font-medium">
+              {formatGbp(preview.normalized_monthly_outgoings)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Monthly headroom</dt>
+            <dd className="text-lg font-medium">{formatGbp(preview.monthly_headroom)}</dd>
+          </div>
+        </dl>
+
+        {unresolved && (
+          <Alert>
+            <Info />
+            <AlertTitle>Not ready yet</AlertTitle>
+            <AlertDescription>
+              Tell us what each outgoing was for before saving this to your history.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {conflictMessage && (
+          <Alert>
+            <Info />
+            <AlertTitle>This statement changed</AlertTitle>
+            <AlertDescription>{conflictMessage}</AlertDescription>
+          </Alert>
+        )}
+
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            aria-label="I have checked this information"
+            checked={checked}
+            onChange={(event) => onCheckedChange(event.target.checked)}
+          />
+          <span>
+            I have checked this information and believe it reflects my circumstances. Ophelos has
+            not independently checked it.
+          </span>
+        </label>
+
+        <Button type="button" disabled={!checked || unresolved || pending} onClick={onConfirm}>
+          Confirm this statement
+        </Button>
+      </CardContent>
+    </Card>
   )
 }

@@ -162,6 +162,31 @@ class EditableStatementEntry(Base):
     )
 
 
+class ConfirmationIdempotencyKey(Base):
+    """One customer's confirmation attempt, recorded so a retry cannot duplicate history.
+
+    The fingerprint distinguishes a genuine retry of the same request from a
+    different request that happens to reuse the key.
+    """
+
+    __tablename__ = "confirmation_idempotency_keys"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint("customer_id", "idempotency_key", name="uq_idempotency_customer_key"),
+    )
+
+
 class CustomerClassificationPreference(Base):
     """A classification rule the customer created by correcting a suggestion.
 
@@ -224,6 +249,9 @@ class SnapshotIncomeEntry(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Nullable so the migration is safe against snapshots confirmed before
+    # descriptions were recorded; every new confirmation sets it.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     original_frequency: Mapped[str] = mapped_column(String, nullable=False)
     normalized_monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
@@ -241,6 +269,13 @@ class SnapshotOutgoingEntry(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Nullable so the migration is safe against snapshots confirmed before
+    # these were recorded; every new confirmation sets them.
+    description: Mapped[str | None] = mapped_column(String, nullable=True)
+    display_category: Mapped[str | None] = mapped_column(String, nullable=True)
+    outgoing_treatment: Mapped[str | None] = mapped_column(String, nullable=True)
+    classification_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    taxonomy_version: Mapped[str | None] = mapped_column(String, nullable=True)
     original_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     original_frequency: Mapped[str] = mapped_column(String, nullable=False)
     normalized_monthly_amount: Mapped[Decimal] = mapped_column(MONEY, nullable=False)

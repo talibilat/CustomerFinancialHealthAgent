@@ -5,15 +5,17 @@ from the submitted statement, and update replaces only the editable working
 copy, so confirmed history is never touched here.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.dependencies import get_db
 from customer_financial_health_api.api.schemas import (
     ClassificationOut,
+    ConfirmedSnapshotResponse,
+    StatementConfirmationRequest,
     EditableStatementOut,
     EditableStatementResponse,
     ExpectedChangeOut,
@@ -26,6 +28,7 @@ from customer_financial_health_api.api.schemas import (
     StatementUpdateRequest,
 )
 from customer_financial_health_api.domain.classification import (
+    TAXONOMY_VERSION,
     ClassificationOutcome,
     CustomerPreference,
     DisplayCategory,
@@ -44,6 +47,9 @@ from customer_financial_health_api.domain.statement import (
 )
 from customer_financial_health_api.persistence.repository import (
     EditableStatementView,
+    IdempotencyConflict,
+    UnresolvedClassifications,
+    confirm_statement,
     get_customer_preferences,
     save_customer_preference,
     StaleStatementVersion,
@@ -400,4 +406,153 @@ def preview_financial_statement(
         unresolved_classifications=unresolved,
         # Confirmation is withheld until every outgoing has a settled meaning.
         can_confirm=not unresolved,
+    )
+
+
+def _snapshot_entries_out(entries) -> list[StatementEntryOut]:
+    return [
+        StatementEntryOut(
+            entry_id=str(index),
+            description=entry.description or "",
+            original_amount=str(entry.original_amount),
+            original_frequency=entry.original_frequency.value,
+            normalized_monthly_amount=str(entry.normalized_monthly_amount),
+            classification=(
+                ClassificationOut(
+                    display_category=(
+                        entry.display_category.value if entry.display_category else None
+                    ),
+                    outgoing_treatment=(
+                        entry.outgoing_treatment.value if entry.outgoing_treatment else None
+                    ),
+                    source=(
+                        entry.classification_source.value if entry.classification_source else None
+                    ),
+                    taxonomy_version=entry.taxonomy_version or TAXONOMY_VERSION,
+                    requires_confirmation=False,
+                    reason_code=None,
+                )
+                if entry.display_category is not None
+                else None
+            ),
+        )
+        for index, entry in enumerate(entries)
+    ]
+
+
+@router.post("/confirm", response_model=ConfirmedSnapshotResponse, status_code=201)
+def confirm_financial_statement(
+    submission: StatementConfirmationRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    session: Session = Depends(get_db),
+) -> ConfirmedSnapshotResponse:
+    customer = _current_customer(session)
+    statement = _validated(submission)
+
+    if not submission.checked_information:
+        raise _rejected(
+            [
+                FieldError(
+                    "checked_information",
+                    "confirmation_not_checked",
+                    "Confirm that you have checked this information and believe it reflects your circumstances.",
+                )
+            ]
+        )
+
+    confirmed, remember = _submitted_classifications(submission)
+    stored = get_editable_statement(
+        session, customer_id=customer.id, statement_period=statement.statement_period
+    )
+    if stored is not None:
+        submitted_descriptions = {
+            entry.entry_id: normalize_description(entry.description)
+            for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments)
+        }
+        carried = {
+            entry_id: outcome
+            for entry_id, outcome in stored.classifications.items()
+            if submitted_descriptions.get(entry_id) == outcome.normalized_description
+        }
+        confirmed = {**carried, **confirmed}
+
+    # Anything the customer did not settle explicitly still resolves through the
+    # deterministic workflow; only genuinely unresolved entries block the save.
+    preferences = get_customer_preferences(session, customer_id=customer.id)
+    classifications = _resolve_classifications(
+        statement, confirmed=confirmed, preferences=preferences
+    )
+
+    for _, outcome in remember:
+        save_customer_preference(
+            session, customer_id=customer.id, preference=outcome.as_preference()
+        )
+
+    try:
+        snapshot = confirm_statement(
+            session,
+            customer_id=customer.id,
+            statement=statement,
+            classifications=classifications,
+            expected_version=submission.expected_version,
+            idempotency_key=idempotency_key,
+            confirmed_at=datetime.now(timezone.utc),
+        )
+    except StaleStatementVersion as conflict:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "statement_version_conflict",
+                "message": "This statement changed. Preview it again before confirming.",
+                "current_version": conflict.current,
+            },
+        ) from conflict
+    except UnresolvedClassifications as unresolved:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "classifications_unresolved",
+                "message": "Tell us what each outgoing was for before confirming.",
+                "entry_ids": list(unresolved.entry_ids),
+            },
+        ) from unresolved
+    except IdempotencyConflict as conflict:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_key_conflict",
+                "message": "This confirmation reference was already used for a different statement.",
+            },
+        ) from conflict
+
+    session.commit()
+
+    return ConfirmedSnapshotResponse(
+        snapshot_id=str(snapshot.id),
+        statement_period=snapshot.statement_period,
+        confirmed_at=snapshot.confirmed_at,
+        calculation_policy_version=snapshot.calculation_policy_version,
+        taxonomy_version=TAXONOMY_VERSION,
+        normalized_monthly_income=str(snapshot.normalized_monthly_income),
+        normalized_monthly_outgoings=str(snapshot.normalized_monthly_outgoings),
+        monthly_headroom=str(snapshot.monthly_headroom),
+        result_code=snapshot.result_code.value,
+        warnings=list(snapshot.warnings),
+        income_entries=_snapshot_entries_out(snapshot.income_entries),
+        outgoing_entries=_snapshot_entries_out(snapshot.outgoing_entries),
+        resilience=ResilienceOut(
+            accessible_savings=_optional_str(snapshot.resilience.accessible_savings),
+            protected_reserve=_optional_str(snapshot.resilience.protected_reserve),
+            current_account_balance=_optional_str(snapshot.resilience.current_account_balance),
+            known_arrears=_optional_str(snapshot.resilience.known_arrears),
+            savings_above_reserve=_optional_str(snapshot.resilience.savings_above_reserve),
+            reserve_gap=_optional_str(snapshot.resilience.reserve_gap),
+            result_code=(
+                snapshot.resilience.result_code.value if snapshot.resilience.result_code else None
+            ),
+            warnings=list(snapshot.resilience.warnings),
+        ),
     )

@@ -10,6 +10,7 @@ from customer_financial_health_api.domain.financial_health import (
     calculate_monthly_position,
     calculate_resilience,
 )
+from customer_financial_health_api.domain.classification import classify_outgoing
 from customer_financial_health_api.domain.statement import (
     FinancialStatement,
     LookingAheadInput,
@@ -46,11 +47,17 @@ def seed_demo_data(session: Session) -> None:
 
     customer = create_customer(session)
 
-    income_entries = [entry.as_money_entry() for entry in INCOME_ENTRIES]
-    outgoing_entries = [
-        entry.as_money_entry() for entry in OUTGOING_ENTRIES + REPAYMENT_COMMITMENTS
-    ]
-    position = calculate_monthly_position(income_entries, outgoing_entries)
+    income_entries = list(INCOME_ENTRIES)
+    outgoing_entries = list(OUTGOING_ENTRIES + REPAYMENT_COMMITMENTS)
+    position = calculate_monthly_position(
+        [entry.as_money_entry() for entry in income_entries],
+        [entry.as_money_entry() for entry in outgoing_entries],
+    )
+    # The seeded outgoings all resolve from global rules, with no provider.
+    classifications = {
+        entry.entry_id: classify_outgoing(entry.description, preferences=())
+        for entry in outgoing_entries
+    }
 
     # Deliberately a mixed picture: positive monthly headroom, but accessible
     # savings sit below the customer's protected reserve, and the current
@@ -76,6 +83,7 @@ def seed_demo_data(session: Session) -> None:
         income_entries=income_entries,
         outgoing_entries=outgoing_entries,
         resilience=resilience,
+        classifications=classifications,
     )
 
     save_editable_statement(
