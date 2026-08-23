@@ -49,6 +49,17 @@ class OverviewResponse(BaseModel):
 # Pydantic, produces the field-specific error the customer's form needs.
 
 
+class ClassificationIn(BaseModel):
+    """What the customer accepted or corrected for one outgoing."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_category: str
+    outgoing_treatment: str
+    # Create or update a customer-scoped preference for this phrase.
+    remember: bool = False
+
+
 class StatementEntryIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -56,6 +67,7 @@ class StatementEntryIn(BaseModel):
     description: str
     amount: str
     frequency: str
+    classification: ClassificationIn | None = None
 
 
 class ExpectedChangeIn(BaseModel):
@@ -104,6 +116,17 @@ class StatementUpdateRequest(StatementSubmission):
     expected_version: int | None = None
 
 
+class ClassificationOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_category: str | None
+    outgoing_treatment: str | None
+    source: str | None
+    taxonomy_version: str
+    requires_confirmation: bool
+    reason_code: str | None
+
+
 class StatementEntryOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -112,6 +135,8 @@ class StatementEntryOut(BaseModel):
     original_amount: str
     original_frequency: str
     normalized_monthly_amount: str
+    # None for entries that are not classified, such as income.
+    classification: ClassificationOut | None = None
 
 
 class ExpectedChangeOut(BaseModel):
@@ -178,6 +203,8 @@ class StatementPreviewResponse(BaseModel):
     normalized_monthly_protected_future_provisions: str
     expected_changes: list[ExpectedChangeOut]
     resilience: ResilienceOut
+    unresolved_classifications: list[str]
+    can_confirm: bool
 
 
 class FieldErrorOut(BaseModel):

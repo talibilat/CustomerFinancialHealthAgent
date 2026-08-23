@@ -189,6 +189,98 @@
   },
   "components": {
     "schemas": {
+      "ClassificationIn": {
+        "properties": {
+          "display_category": {
+            "type": "string",
+            "title": "Display Category"
+          },
+          "outgoing_treatment": {
+            "type": "string",
+            "title": "Outgoing Treatment"
+          },
+          "remember": {
+            "type": "boolean",
+            "title": "Remember",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "display_category",
+          "outgoing_treatment"
+        ],
+        "title": "ClassificationIn",
+        "description": "What the customer accepted or corrected for one outgoing."
+      },
+      "ClassificationOut": {
+        "properties": {
+          "display_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Category"
+          },
+          "outgoing_treatment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outgoing Treatment"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "taxonomy_version": {
+            "type": "string",
+            "title": "Taxonomy Version"
+          },
+          "requires_confirmation": {
+            "type": "boolean",
+            "title": "Requires Confirmation"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "display_category",
+          "outgoing_treatment",
+          "source",
+          "taxonomy_version",
+          "requires_confirmation",
+          "reason_code"
+        ],
+        "title": "ClassificationOut"
+      },
       "EditableStatementOut": {
         "properties": {
           "statement_period": {
@@ -755,6 +847,16 @@
           "frequency": {
             "type": "string",
             "title": "Frequency"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationIn"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -787,6 +889,16 @@
           "normalized_monthly_amount": {
             "type": "string",
             "title": "Normalized Monthly Amount"
+          },
+          "classification": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -850,6 +962,17 @@
           },
           "resilience": {
             "$ref": "#/components/schemas/ResilienceOut"
+          },
+          "unresolved_classifications": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unresolved Classifications"
+          },
+          "can_confirm": {
+            "type": "boolean",
+            "title": "Can Confirm"
           }
         },
         "additionalProperties": false,
@@ -865,7 +988,9 @@
           "normalized_monthly_irregular_costs",
           "normalized_monthly_protected_future_provisions",
           "expected_changes",
-          "resilience"
+          "resilience",
+          "unresolved_classifications",
+          "can_confirm"
         ],
         "title": "StatementPreviewResponse"
       },

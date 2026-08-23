@@ -80,6 +80,7 @@ class TestRetrieve:
             "original_amount",
             "original_frequency",
             "normalized_monthly_amount",
+            "classification",
         }
         assert food["original_amount"] == "120.00"
         assert food["original_frequency"] == "weekly"

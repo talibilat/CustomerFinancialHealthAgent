@@ -1,5 +1,5 @@
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Sequence
@@ -16,6 +16,15 @@ from customer_financial_health_api.domain.financial_health import (
     ResilienceResultCode,
     normalize_to_monthly,
 )
+from customer_financial_health_api.domain.classification import (
+    TAXONOMY_VERSION,
+    normalize_description,
+    ClassificationOutcome,
+    ClassificationSource,
+    CustomerPreference,
+    DisplayCategory,
+    OutgoingTreatment,
+)
 from customer_financial_health_api.domain.statement import (
     ExpectedChange,
     ExpectedChangeKind,
@@ -30,6 +39,7 @@ from customer_financial_health_api.persistence.models import (
     EditableFinancialStatement,
     EditableStatementEntry,
     EditableStatementExpectedChange,
+    CustomerClassificationPreference,
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
 )
@@ -82,6 +92,9 @@ class EditableStatementView:
     version: int
     updated_at: datetime
     statement: FinancialStatement
+    # Confirmed classifications, keyed by entry id. An entry missing from this
+    # mapping is unresolved and still needs the customer.
+    classifications: dict[str, ClassificationOutcome] = field(default_factory=dict)
 
 
 def create_customer(session: Session) -> Customer:
@@ -213,9 +226,15 @@ def get_effective_snapshot(session: Session, *, customer_id: uuid.UUID) -> Confi
     return _to_view(snapshot)
 
 
-def _entry_rows_for(section: str, entries: Sequence[StatementEntry]) -> list[EditableStatementEntry]:
-    return [
-        EditableStatementEntry(
+def _entry_rows_for(
+    section: str,
+    entries: Sequence[StatementEntry],
+    classifications: dict[str, ClassificationOutcome] | None = None,
+) -> list[EditableStatementEntry]:
+    resolved = classifications or {}
+    rows = []
+    for index, entry in enumerate(entries):
+        row = EditableStatementEntry(
             section=section,
             entry_key=entry.entry_id,
             description=entry.description,
@@ -223,8 +242,16 @@ def _entry_rows_for(section: str, entries: Sequence[StatementEntry]) -> list[Edi
             original_frequency=entry.frequency.value,
             sort_order=index,
         )
-        for index, entry in enumerate(entries)
-    ]
+        classification = resolved.get(entry.entry_id)
+        # Only a resolved classification is stored; an unresolved one leaves
+        # the columns NULL rather than inventing a default.
+        if classification is not None and classification.is_resolved:
+            row.display_category = classification.display_category.value
+            row.outgoing_treatment = classification.outgoing_treatment.value
+            row.classification_source = classification.source.value
+            row.taxonomy_version = classification.taxonomy_version
+        rows.append(row)
+    return rows
 
 
 def save_editable_statement(
@@ -233,6 +260,7 @@ def save_editable_statement(
     customer_id: uuid.UUID,
     statement: FinancialStatement,
     expected_version: int | None,
+    classifications: dict[str, ClassificationOutcome] | None = None,
 ) -> EditableStatementView:
     """Create or replace the customer's editable statement for its period.
 
@@ -271,8 +299,8 @@ def save_editable_statement(
     # statement, so add, change, and remove all resolve to one assignment.
     stored.entries = (
         _entry_rows_for(INCOME, statement.income_entries)
-        + _entry_rows_for(OUTGOING, statement.outgoing_entries)
-        + _entry_rows_for(REPAYMENT_COMMITMENT, statement.repayment_commitments)
+        + _entry_rows_for(OUTGOING, statement.outgoing_entries, classifications)
+        + _entry_rows_for(REPAYMENT_COMMITMENT, statement.repayment_commitments, classifications)
         + _entry_rows_for(IRREGULAR_COST, statement.looking_ahead.irregular_costs)
         + _entry_rows_for(PROTECTED_FUTURE_PROVISION, statement.looking_ahead.protected_future_provisions)
     )
@@ -305,11 +333,25 @@ def _to_editable_view(stored: EditableFinancialStatement) -> EditableStatementVi
             if row.section == name
         )
 
+    classifications = {
+        row.entry_key: ClassificationOutcome(
+            normalized_description=normalize_description(row.description),
+            display_category=DisplayCategory(row.display_category),
+            outgoing_treatment=OutgoingTreatment(row.outgoing_treatment),
+            source=ClassificationSource(row.classification_source),
+            reason_code=None,
+            taxonomy_version=row.taxonomy_version,
+        )
+        for row in stored.entries
+        if row.display_category is not None
+    }
+
     return EditableStatementView(
         id=stored.id,
         customer_id=stored.customer_id,
         version=stored.version,
         updated_at=stored.updated_at,
+        classifications=classifications,
         statement=FinancialStatement(
             statement_period=stored.statement_period,
             income_entries=section(INCOME),
@@ -351,3 +393,55 @@ def get_editable_statement(
     if stored is None:
         return None
     return _to_editable_view(stored)
+
+
+def get_customer_preferences(
+    session: Session, *, customer_id: uuid.UUID
+) -> tuple[CustomerPreference, ...]:
+    """Every classification preference this customer has confirmed."""
+    stmt = (
+        select(CustomerClassificationPreference)
+        .where(CustomerClassificationPreference.customer_id == customer_id)
+        .order_by(CustomerClassificationPreference.normalized_description)
+    )
+    return tuple(
+        CustomerPreference(
+            normalized_description=row.normalized_description,
+            display_category=DisplayCategory(row.display_category),
+            outgoing_treatment=OutgoingTreatment(row.outgoing_treatment),
+        )
+        for row in session.execute(stmt).scalars()
+    )
+
+
+def save_customer_preference(
+    session: Session, *, customer_id: uuid.UUID, preference: CustomerPreference
+) -> None:
+    """Create or update this customer's preference for one normalized phrase.
+
+    Scoped to the customer throughout: another customer's preference for the
+    same phrase is never read or written here, and the global rules are never
+    touched.
+    """
+    stmt = select(CustomerClassificationPreference).where(
+        CustomerClassificationPreference.customer_id == customer_id,
+        CustomerClassificationPreference.normalized_description == preference.normalized_description,
+    )
+    stored = session.execute(stmt).scalar_one_or_none()
+
+    if stored is None:
+        session.add(
+            CustomerClassificationPreference(
+                customer_id=customer_id,
+                normalized_description=preference.normalized_description,
+                display_category=preference.display_category.value,
+                outgoing_treatment=preference.outgoing_treatment.value,
+                taxonomy_version=TAXONOMY_VERSION,
+            )
+        )
+    else:
+        stored.display_category = preference.display_category.value
+        stored.outgoing_treatment = preference.outgoing_treatment.value
+        stored.taxonomy_version = TAXONOMY_VERSION
+
+    session.flush()
