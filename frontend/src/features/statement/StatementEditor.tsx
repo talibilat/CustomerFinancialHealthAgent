@@ -28,6 +28,7 @@ type EntryDraft = {
   amount: string
   frequency: string
   normalizedMonthlyAmount: string | null
+  classification?: ClassificationDraft
 }
 
 type ResilienceDraft = {
@@ -37,7 +38,42 @@ type ResilienceDraft = {
   known_arrears: string
 }
 
+type ClassificationDraft = {
+  displayCategory: string
+  outgoingTreatment: string
+  requiresConfirmation: boolean
+  reasonCode: string | null
+  /** Only a classification the customer touched is sent back. */
+  touched: boolean
+  remember: boolean
+}
+
 type ChangeDraft = EntryDraft & { kind: string }
+
+// Customer-facing labels. Treatment wording deliberately never implies that a
+// reported cost is spare money.
+const DISPLAY_CATEGORIES = [
+  { value: 'housing', label: 'Housing' },
+  { value: 'council_tax_and_priority_bills', label: 'Council tax and priority bills' },
+  { value: 'utilities', label: 'Utilities' },
+  { value: 'food_and_housekeeping', label: 'Food and housekeeping' },
+  { value: 'transport', label: 'Transport' },
+  { value: 'health_and_care', label: 'Health and care' },
+  { value: 'children_and_dependants', label: 'Children and dependants' },
+  { value: 'communications', label: 'Communications' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'existing_debt_repayments', label: 'Existing debt repayments' },
+  { value: 'leisure_and_hobbies', label: 'Leisure and hobbies' },
+  { value: 'savings_and_future_provisions', label: 'Savings and future provisions' },
+  { value: 'other', label: 'Other' },
+] as const
+
+const OUTGOING_TREATMENTS = [
+  { value: 'protected_outgoing', label: 'Protected outgoing' },
+  { value: 'existing_credit_commitment', label: 'Existing credit commitment' },
+  { value: 'flexible_living_cost', label: 'Flexible living cost' },
+  { value: 'protected_future_provision', label: 'Protected future provision' },
+] as const
 
 type Draft = {
   income: EntryDraft[]
@@ -76,6 +112,16 @@ function toDraftEntry(entry: StatementEntryOut): EntryDraft {
     amount: entry.original_amount,
     frequency: entry.original_frequency,
     normalizedMonthlyAmount: entry.normalized_monthly_amount,
+    classification: entry.classification
+      ? {
+          displayCategory: entry.classification.display_category ?? '',
+          outgoingTreatment: entry.classification.outgoing_treatment ?? '',
+          requiresConfirmation: entry.classification.requires_confirmation,
+          reasonCode: entry.classification.reason_code ?? null,
+          touched: false,
+          remember: false,
+        }
+      : undefined,
   }
 }
 
@@ -111,12 +157,28 @@ function toDraft(response: EditableStatementResponse): Draft {
 }
 
 function toSubmittedEntries(entries: EntryDraft[]) {
-  return entries.map((entry) => ({
-    entry_id: entry.entryId,
-    description: entry.description,
-    amount: entry.amount,
-    frequency: entry.frequency,
-  }))
+  return entries.map((entry) => {
+    const base = {
+      entry_id: entry.entryId,
+      description: entry.description,
+      amount: entry.amount,
+      frequency: entry.frequency,
+    }
+    // Only a classification the customer actually settled is sent, so a
+    // deterministic match is never silently recorded as their decision.
+    const classification = entry.classification
+    if (!classification?.touched || !classification.displayCategory || !classification.outgoingTreatment) {
+      return base
+    }
+    return {
+      ...base,
+      classification: {
+        display_category: classification.displayCategory,
+        outgoing_treatment: classification.outgoingTreatment,
+        remember: classification.remember,
+      },
+    }
+  })
 }
 
 /** An omitted optional amount stays omitted rather than becoming a zero. */
@@ -317,6 +379,117 @@ function EntryRow({
           <span className="text-foreground">{formatGbp(entry.normalizedMonthlyAmount)} per month</span>
         </p>
       )}
+
+      {entry.classification && (
+        <ClassificationFields
+          label={label}
+          path={path}
+          classification={entry.classification}
+          errors={errors}
+          onChange={(classification) => onChange({ ...entry, classification })}
+        />
+      )}
+    </div>
+  )
+}
+
+function ClassificationFields({
+  label,
+  path,
+  classification,
+  errors,
+  onChange,
+}: {
+  label: string
+  path: (field: string) => string
+  classification: ClassificationDraft
+  errors: FieldError[]
+  onChange: (next: ClassificationDraft) => void
+}) {
+  const categoryPath = path('classification.display_category')
+  const treatmentPath = path('classification.outgoing_treatment')
+  const categoryError = errorFor(errors, categoryPath)
+  const treatmentError = errorFor(errors, treatmentPath)
+  const unresolved = classification.requiresConfirmation && !classification.touched
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      {unresolved && (
+        <p className="mb-2 text-sm font-medium">
+          Tell us what this was for. We will not guess on your behalf.
+        </p>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-sm text-muted-foreground" htmlFor={domId(categoryPath)}>
+            Category
+          </label>
+          <select
+            id={domId(categoryPath)}
+            aria-label={`${label} category`}
+            aria-invalid={categoryError ? true : undefined}
+            aria-describedby={categoryError ? `${domId(categoryPath)}-error` : undefined}
+            className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
+            value={classification.displayCategory}
+            onChange={(event) =>
+              // The treatment is deliberately left alone: whether a cost is
+              // essential depends on the customer's circumstances, not its label.
+              onChange({ ...classification, displayCategory: event.target.value, touched: true })
+            }
+          >
+            <option value="">Choose a category</option>
+            {DISPLAY_CATEGORIES.map((category) => (
+              <option key={category.value} value={category.value}>
+                {category.label}
+              </option>
+            ))}
+          </select>
+          <FieldMessage error={categoryError} />
+        </div>
+
+        <div>
+          <label className="text-sm text-muted-foreground" htmlFor={domId(treatmentPath)}>
+            How this is treated
+          </label>
+          <select
+            id={domId(treatmentPath)}
+            aria-label={`${label} treatment`}
+            aria-invalid={treatmentError ? true : undefined}
+            aria-describedby={treatmentError ? `${domId(treatmentPath)}-error` : undefined}
+            className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
+            value={classification.outgoingTreatment}
+            onChange={(event) =>
+              onChange({ ...classification, outgoingTreatment: event.target.value, touched: true })
+            }
+          >
+            <option value="">Choose how this is treated</option>
+            {OUTGOING_TREATMENTS.map((treatment) => (
+              <option key={treatment.value} value={treatment.value}>
+                {treatment.label}
+              </option>
+            ))}
+          </select>
+          <FieldMessage error={treatmentError} />
+        </div>
+      </div>
+
+      {classification.touched && (
+        <label className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            aria-label={`Remember this for ${label}`}
+            checked={classification.remember}
+            onChange={(event) => onChange({ ...classification, remember: event.target.checked })}
+          />
+          Remember this for future statements
+        </label>
+      )}
+
+      <p className="mt-2 text-sm text-muted-foreground">
+        A flexible living cost is still a real cost you reported. It is never treated as money
+        available for repayment.
+      </p>
     </div>
   )
 }
