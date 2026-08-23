@@ -213,3 +213,30 @@ class FieldErrorOut(BaseModel):
     field: str
     code: str
     message: str
+
+
+class StatementConfirmationRequest(StatementSubmission):
+    """A submission the customer is asking to record permanently."""
+
+    expected_version: int
+    # The customer's own statement that they checked the information. This is
+    # not, and must not be presented as, independent verification.
+    checked_information: bool = False
+
+
+class ConfirmedSnapshotResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: str
+    statement_period: date
+    confirmed_at: datetime
+    calculation_policy_version: str
+    taxonomy_version: str
+    normalized_monthly_income: str
+    normalized_monthly_outgoings: str
+    monthly_headroom: str
+    result_code: str
+    warnings: list[str]
+    income_entries: list[StatementEntryOut]
+    outgoing_entries: list[StatementEntryOut]
+    resilience: ResilienceOut
