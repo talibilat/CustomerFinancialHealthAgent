@@ -15,7 +15,10 @@ config = context.config
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Applying migrations must not silence the application's own loggers.
+    # Alembic's default would disable every logger that already exists, which
+    # loses the safe operational logging the API relies on.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 database_url = os.environ.get("DATABASE_URL")
 if database_url:

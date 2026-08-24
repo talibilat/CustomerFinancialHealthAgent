@@ -150,10 +150,13 @@ def retrieve_financial_statement(
     )
     if stored is None:
         raise HTTPException(status_code=404, detail="no_editable_statement")
+    preferences = get_customer_preferences(session, customer_id=customer.id)
+    bounded_provider = _demo_bounded_provider(session, provider)
+    session.rollback()
     return _statement_response(
         stored,
-        get_customer_preferences(session, customer_id=customer.id),
-        _demo_bounded_provider(session, provider),
+        preferences,
+        bounded_provider,
     )
 
 
@@ -213,10 +216,13 @@ def update_financial_statement(
         ) from conflict
 
     session.commit()
+    preferences = get_customer_preferences(session, customer_id=customer.id)
+    bounded_provider = _demo_bounded_provider(session, provider)
+    session.rollback()
     return _statement_response(
         saved,
-        get_customer_preferences(session, customer_id=customer.id),
-        _demo_bounded_provider(session, provider),
+        preferences,
+        bounded_provider,
     )
 
 
@@ -246,11 +252,17 @@ def preview_financial_statement(
     already_confirmed = dict(stored.classifications) if stored else {}
     already_confirmed.update(confirmed)
 
+    bounded_provider = _demo_bounded_provider(session, provider)
+    # Preferences, the editable statement, and the active demo mode are now
+    # ordinary values. End the read transaction before the optional remote
+    # provider call so Azure latency never occupies a database transaction.
+    session.rollback()
+
     classifications = _resolve_classifications(
         statement,
         confirmed=already_confirmed,
         preferences=preferences,
-        provider=_demo_bounded_provider(session, provider),
+        provider=bounded_provider,
     )
     unresolved = [
         entry_id

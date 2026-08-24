@@ -135,6 +135,125 @@ class TestClassificationOnRetrieve:
             "requires_clarification": False,
         }
 
+    def test_provider_generation_does_not_hold_a_database_transaction_open(
+        self, seeded, db_session
+    ):
+        from customer_financial_health_api.api.dependencies import (
+            get_classification_provider,
+            get_db,
+        )
+
+        current = retrieve(seeded)
+        body = submitted(current["statement"])
+        body["outgoing_entries"].append(
+            {
+                "entry_id": "unknown-transaction-boundary",
+                "description": "Dance class",
+                "amount": "25.00",
+                "frequency": "monthly",
+            }
+        )
+        transaction_states: list[bool] = []
+
+        class ProviderFake:
+            def suggest(self, **kwargs):
+                transaction_states.append(db_session.in_transaction())
+                return None
+
+        def same_session():
+            yield db_session
+
+        seeded.app.dependency_overrides[get_db] = same_session
+        seeded.app.dependency_overrides[get_classification_provider] = ProviderFake
+        try:
+            response = seeded.post("/financial-statement/preview", json=body)
+        finally:
+            seeded.app.dependency_overrides.pop(get_db, None)
+            seeded.app.dependency_overrides[get_classification_provider] = lambda: None
+
+        assert response.status_code == 200
+        assert transaction_states == [False]
+
+    def test_retrieval_provider_does_not_hold_a_database_transaction_open(
+        self, seeded, db_session
+    ):
+        from customer_financial_health_api.api.dependencies import (
+            get_classification_provider,
+            get_db,
+        )
+
+        current = retrieve(seeded)
+        body = submitted(current["statement"], expected_version=current["version"])
+        body["outgoing_entries"].append(
+            {
+                "entry_id": "unknown-retrieval-boundary",
+                "description": "Dance class",
+                "amount": "25.00",
+                "frequency": "monthly",
+            }
+        )
+        assert seeded.put("/financial-statement", json=body).status_code == 200
+
+        transaction_states: list[bool] = []
+
+        class ProviderFake:
+            def suggest(self, **kwargs):
+                transaction_states.append(db_session.in_transaction())
+                return None
+
+        def same_session():
+            yield db_session
+
+        seeded.app.dependency_overrides[get_db] = same_session
+        seeded.app.dependency_overrides[get_classification_provider] = ProviderFake
+        try:
+            response = retrieve(seeded)
+        finally:
+            seeded.app.dependency_overrides.pop(get_db, None)
+            seeded.app.dependency_overrides[get_classification_provider] = lambda: None
+
+        assert response["statement"]["outgoing_entries"][-1]["description"] == "Dance class"
+        assert transaction_states == [False]
+
+    def test_update_provider_does_not_hold_a_database_transaction_open(
+        self, seeded, db_session
+    ):
+        from customer_financial_health_api.api.dependencies import (
+            get_classification_provider,
+            get_db,
+        )
+
+        current = retrieve(seeded)
+        body = submitted(current["statement"], expected_version=current["version"])
+        body["outgoing_entries"].append(
+            {
+                "entry_id": "unknown-update-boundary",
+                "description": "Dance class",
+                "amount": "25.00",
+                "frequency": "monthly",
+            }
+        )
+        transaction_states: list[bool] = []
+
+        class ProviderFake:
+            def suggest(self, **kwargs):
+                transaction_states.append(db_session.in_transaction())
+                return None
+
+        def same_session():
+            yield db_session
+
+        seeded.app.dependency_overrides[get_db] = same_session
+        seeded.app.dependency_overrides[get_classification_provider] = ProviderFake
+        try:
+            response = seeded.put("/financial-statement", json=body)
+        finally:
+            seeded.app.dependency_overrides.pop(get_db, None)
+            seeded.app.dependency_overrides[get_classification_provider] = lambda: None
+
+        assert response.status_code == 200
+        assert transaction_states == [False]
+
 
 class TestConfirmationAndCorrection:
     def _add_ambiguous(self, client):
