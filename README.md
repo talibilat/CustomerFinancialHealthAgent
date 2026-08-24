@@ -78,26 +78,33 @@ cd backend
 RUN_LIVE_AZURE_OPENAI_TESTS=1 uv run pytest -m live -o addopts= tests/live/test_azure_classification_live.py
 ```
 
-The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, the complete manual classification and confirmation fallback without Azure, a saved scenario remaining tied to its original basis after correction, and the zero-income, reported-shortfall, uncovered-protected-cost, and Azure-unavailable presets:
+The Playwright journeys verify the connected statement preview, the 375px layout, accessible validation errors, stale-version refresh, the complete manual classification and confirmation fallback without Azure, a saved scenario remaining tied to its original basis after correction, and the zero-income, reported-shortfall, uncovered-protected-cost, and Azure-unavailable presets.
+Install Chromium and its operating-system dependencies once, then use the isolated command for repeatable runs:
 
 ```bash
 cd frontend
-npx playwright install chromium
+npx playwright install --with-deps chromium
 npm run test:e2e
 ```
 
-The suite reuses an already-running stack rather than rebuilding it, so rebuild the frontend image after changing frontend code or the run will test the previous build:
+The isolated command uses a dedicated `cfha-e2e` Compose project on ports `15173` and `18000`, builds fresh images, starts a fresh database volume, waits for readiness, disables Azure OpenAI, runs Chromium serially, and removes that project and volume afterward.
+It does not reuse or change the ordinary development stack.
+Override its names or ports when needed without editing Compose:
 
 ```bash
-docker compose up --build -d frontend
+E2E_COMPOSE_PROJECT_NAME=cfha-e2e-review \
+E2E_FRONTEND_PORT=15174 \
+E2E_BACKEND_PORT=18001 \
+npm run test:e2e
 ```
 
-To regenerate the TypeScript client after a backend API change:
+To regenerate the OpenAPI document and TypeScript client after a backend API change, and fail if the committed artifacts are stale:
 
 ```bash
-cd backend && PYTHONPATH=src uv run export-openapi
-cd ../frontend && npm run generate-client
+./scripts/check-generated-client.sh
 ```
+
+GitHub Actions runs that generated-contract check and the isolated Playwright suite for pull requests and pushes to `main`.
 
 ## Product principles
 
