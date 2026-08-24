@@ -19,7 +19,7 @@ const NAV_ITEMS = [
 
 function Navigation() {
   return (
-    <nav aria-label="Sections" className="mb-8 flex justify-center gap-2">
+    <nav aria-label="Sections" className="mb-8 flex flex-wrap justify-center gap-2">
       {NAV_ITEMS.map((item) => (
         <NavLink
           key={item.to}
