@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "generate-client": "openapi-ts",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "./e2e/run-isolated.sh",
+    "test:e2e:connected": "playwright test",
+    "test:e2e:isolated": "./e2e/run-isolated.sh"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
