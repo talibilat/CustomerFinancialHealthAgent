@@ -251,6 +251,10 @@ class HistorySnapshotOut(BaseModel):
     snapshot_id: str
     statement_period: date
     confirmed_at: datetime
+    # Lineage: which snapshot this one replaced, and why.
+    supersedes_snapshot_id: str | None
+    correction_reason: str | None
+    is_effective: bool
     # Read from what was stored, never recomputed with today's policy.
     calculation_policy_version: str
     normalized_monthly_income: str
@@ -265,6 +269,7 @@ class HistorySnapshotOut(BaseModel):
 class SeriesPointOut(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    snapshot_id: str
     statement_period: date
     normalized_monthly_income: str
     normalized_monthly_outgoings: str
@@ -303,3 +308,14 @@ class HistoryResponse(BaseModel):
     snapshots: list[HistorySnapshotOut]
     series: list[SeriesPointOut]
     latest_change: ChangeExplanationOut | None
+
+
+class CorrectionRequest(StatementSubmission):
+    """A corrected statement replacing a confirmed snapshot."""
+
+    correction_reason: str
+
+
+class CorrectedSnapshotResponse(ConfirmedSnapshotResponse):
+    supersedes_snapshot_id: str
+    correction_reason: str

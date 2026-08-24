@@ -84,6 +84,8 @@ class ConfirmedSnapshotView:
     income_entries: tuple[SnapshotEntryView, ...]
     outgoing_entries: tuple[SnapshotEntryView, ...]
     resilience: ResilienceResult
+    supersedes_snapshot_id: uuid.UUID | None = None
+    correction_reason: str | None = None
 
 
 class StaleStatementVersion(Exception):
@@ -234,6 +236,8 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
             )
             for e in snapshot.outgoing_entries
         ),
+        supersedes_snapshot_id=snapshot.supersedes_snapshot_id,
+        correction_reason=snapshot.correction_reason,
         resilience=ResilienceResult(
             accessible_savings=snapshot.accessible_savings,
             protected_reserve=snapshot.protected_reserve,
