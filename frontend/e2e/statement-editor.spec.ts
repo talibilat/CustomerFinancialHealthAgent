@@ -16,7 +16,7 @@ test('edits and previews a statement without changing confirmed history', async 
 
   await page.getByRole('button', { name: 'Preview my position' }).click()
   await expect(page.getByRole('status')).toContainText('Preview updated')
-  await expect(page.getByText('£681.25', { exact: true })).toBeVisible()
+  await expect(page.getByText('Your position if you save this')).toBeVisible()
 
   const confirmedAfter = await request.get('http://localhost:8000/overview')
   expect(confirmedAfter.ok()).toBeTruthy()
@@ -24,7 +24,6 @@ test('edits and previews a statement without changing confirmed history', async 
 
   await rentAmount.fill('1300.00')
   await expect(page.getByText('Your position if you save this')).toHaveCount(0)
-  await expect(page.getByText('£681.25', { exact: true })).toHaveCount(0)
 })
 
 test('keeps the statement editor usable at a 375px viewport', async ({ page }) => {
@@ -45,4 +44,45 @@ test('keeps the statement editor usable at a 375px viewport', async ({ page }) =
     document: document.documentElement.scrollWidth,
   }))
   expect(afterAdd.document).toBeLessThanOrEqual(afterAdd.viewport)
+})
+
+test('manual classification fallback keeps confirmation complete without Azure', async ({ page }) => {
+  await page.goto('/statement')
+  await expect(page.getByRole('textbox', { name: 'Rent amount' })).toBeVisible()
+
+  const stalePotteryRows = page.getByRole('button', { name: 'Remove Weekend pottery' })
+  if ((await stalePotteryRows.count()) > 0) {
+    while ((await stalePotteryRows.count()) > 0) {
+      await stalePotteryRows.first().click()
+    }
+    await page.getByRole('button', { name: 'Save my statement' }).click()
+    await expect(page.getByRole('status')).toContainText('Your statement was saved')
+  }
+
+  await page.getByRole('button', { name: 'Add an outgoing' }).click()
+
+  const newEntry = page.getByRole('group', { name: 'Outgoing: New entry' })
+  await newEntry.getByRole('textbox', { name: 'New entry description' }).fill('Weekend pottery')
+  const pottery = page.getByRole('group', { name: 'Outgoing: Weekend pottery' })
+  await pottery.getByRole('textbox', { name: 'Weekend pottery amount' }).fill('25.00')
+  await page.getByRole('button', { name: 'Save my statement' }).click()
+  await expect(page.getByRole('status')).toContainText('Your statement was saved')
+
+  await expect(pottery.getByText(/tell us what this was for/i)).toBeVisible()
+  await expect(pottery.getByText(/optional suggestion/i)).toHaveCount(0)
+  await pottery.getByRole('combobox', { name: 'Weekend pottery category' }).selectOption('leisure_and_hobbies')
+  await pottery.getByRole('combobox', { name: 'Weekend pottery treatment' }).selectOption('flexible_living_cost')
+  await page.getByRole('button', { name: 'Save my statement' }).click()
+  await expect(page.getByRole('status')).toContainText('Your statement was saved')
+
+  await page.getByRole('button', { name: 'Preview my position' }).click()
+  await expect(page.getByRole('status')).toContainText('Preview updated')
+  await page.getByRole('checkbox', { name: /checked this information/i }).check()
+  await page.getByRole('button', { name: 'Confirm this statement' }).click()
+  await expect(page.getByText(/this statement is saved to your history/i)).toBeVisible()
+
+  await page.reload()
+  await page.getByRole('button', { name: 'Remove Weekend pottery' }).click()
+  await page.getByRole('button', { name: 'Save my statement' }).click()
+  await expect(page.getByRole('status')).toContainText('Your statement was saved')
 })

@@ -150,6 +150,7 @@ class TestEveryFailurePathFallsBackToManual:
             ConnectionError("connection reset"),
             RuntimeError("429 rate limited"),
             RuntimeError("401 unauthorized"),
+            RuntimeError("403 forbidden"),
             RuntimeError("500 server error"),
             ValueError("content filtered"),
         ],

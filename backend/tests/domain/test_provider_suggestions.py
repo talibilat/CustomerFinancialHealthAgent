@@ -112,6 +112,19 @@ class TestAdversarialOutput:
         ]:
             assert validated(reason=claim) is None, claim
 
+    @pytest.mark.parametrize(
+        "reason",
+        [
+            "The deployment is classification blue.",
+            "Your API key is hidden.",
+            "The endpoint is private.",
+            "I used an environment variable.",
+            "The authorization credential was accepted.",
+        ],
+    )
+    def test_a_reason_mentioning_provider_configuration_is_refused(self, reason):
+        assert validated(reason=reason) is None
+
     def test_a_blank_or_missing_reason_is_refused(self):
         assert validated(reason="") is None
         assert validated(reason=None) is None

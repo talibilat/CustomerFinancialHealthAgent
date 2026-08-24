@@ -46,6 +46,12 @@ _AUTHORITY_CLAIMS = (
     "you can afford",
     "affordable",
     "recommend",
+    "deployment",
+    "api key",
+    "endpoint",
+    "environment variable",
+    "authorization",
+    "credential",
 )
 
 

@@ -11,7 +11,7 @@ from decimal import Decimal
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 
-from customer_financial_health_api.api.dependencies import get_db
+from customer_financial_health_api.api.dependencies import get_classification_provider, get_db
 from customer_financial_health_api.api.schemas import (
     ClassificationOut,
     ConfirmedSnapshotResponse,
@@ -33,9 +33,9 @@ from customer_financial_health_api.domain.classification import (
     CustomerPreference,
     DisplayCategory,
     OutgoingTreatment,
-    classify_outgoing,
     normalize_description,
 )
+from customer_financial_health_api.domain.suggest import ClassificationSuggestionProvider
 from customer_financial_health_api.domain.statement import (
     FieldError,
     ExpectedChange,
@@ -107,10 +107,15 @@ def _statement_out(
 
 
 def _statement_response(
-    stored: EditableStatementView, preferences: tuple[CustomerPreference, ...]
+    stored: EditableStatementView,
+    preferences: tuple[CustomerPreference, ...],
+    provider: ClassificationSuggestionProvider | None = None,
 ) -> EditableStatementResponse:
     classifications = _resolve_classifications(
-        stored.statement, confirmed=stored.classifications, preferences=preferences
+        stored.statement,
+        confirmed=stored.classifications,
+        preferences=preferences,
+        provider=provider,
     )
     return EditableStatementResponse(
         version=stored.version,
@@ -125,7 +130,9 @@ def _statement_response(
 
 @router.get("", response_model=EditableStatementResponse)
 def retrieve_financial_statement(
-    statement_period: date, session: Session = Depends(get_db)
+    statement_period: date,
+    session: Session = Depends(get_db),
+    provider: ClassificationSuggestionProvider | None = Depends(get_classification_provider),
 ) -> EditableStatementResponse:
     customer = _current_customer(session)
     stored = get_editable_statement(
@@ -133,12 +140,18 @@ def retrieve_financial_statement(
     )
     if stored is None:
         raise HTTPException(status_code=404, detail="no_editable_statement")
-    return _statement_response(stored, get_customer_preferences(session, customer_id=customer.id))
+    return _statement_response(
+        stored,
+        get_customer_preferences(session, customer_id=customer.id),
+        provider,
+    )
 
 
 @router.put("", response_model=EditableStatementResponse)
 def update_financial_statement(
-    submission: StatementUpdateRequest, session: Session = Depends(get_db)
+    submission: StatementUpdateRequest,
+    session: Session = Depends(get_db),
+    provider: ClassificationSuggestionProvider | None = Depends(get_classification_provider),
 ) -> EditableStatementResponse:
     customer = _current_customer(session)
     statement = _validated(submission)
@@ -191,13 +204,17 @@ def update_financial_statement(
 
     session.commit()
     return _statement_response(
-        saved, get_customer_preferences(session, customer_id=customer.id)
+        saved,
+        get_customer_preferences(session, customer_id=customer.id),
+        provider,
     )
 
 
 @router.post("/preview", response_model=StatementPreviewResponse)
 def preview_financial_statement(
-    submission: StatementSubmission, session: Session = Depends(get_db)
+    submission: StatementSubmission,
+    session: Session = Depends(get_db),
+    provider: ClassificationSuggestionProvider | None = Depends(get_classification_provider),
 ) -> StatementPreviewResponse:
     statement = _validated(submission)
     confirmed, _ = _submitted_classifications(submission)
@@ -220,7 +237,10 @@ def preview_financial_statement(
     already_confirmed.update(confirmed)
 
     classifications = _resolve_classifications(
-        statement, confirmed=already_confirmed, preferences=preferences
+        statement,
+        confirmed=already_confirmed,
+        preferences=preferences,
+        provider=provider,
     )
     unresolved = [
         entry_id
@@ -267,6 +287,7 @@ def confirm_financial_statement(
     submission: StatementConfirmationRequest,
     idempotency_key: str = Header(..., alias="Idempotency-Key"),
     session: Session = Depends(get_db),
+    provider: ClassificationSuggestionProvider | None = Depends(get_classification_provider),
 ) -> ConfirmedSnapshotResponse:
     customer = _current_customer(session)
     statement = _validated(submission)
@@ -302,7 +323,10 @@ def confirm_financial_statement(
     # deterministic workflow; only genuinely unresolved entries block the save.
     preferences = get_customer_preferences(session, customer_id=customer.id)
     classifications = _resolve_classifications(
-        statement, confirmed=confirmed, preferences=preferences
+        statement,
+        confirmed=confirmed,
+        preferences=preferences,
+        provider=provider,
     )
 
     for _, outcome in remember:

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.schemas import (
     ClassificationOut,
+    ClassificationSuggestionOut,
     ConfirmedSnapshotResponse,
     EditableStatementOut,
     ExpectedChangeOut,
@@ -27,9 +28,13 @@ from customer_financial_health_api.domain.classification import (
     CustomerPreference,
     DisplayCategory,
     OutgoingTreatment,
-    classify_outgoing,
     normalize_description,
 )
+from customer_financial_health_api.domain.suggest import (
+    ClassificationSuggestionProvider,
+    classify_with_suggestions,
+)
+from customer_financial_health_api.domain.suggestions import ProviderSuggestion
 from customer_financial_health_api.domain.statement import (
     ExpectedChange,
     FieldError,
@@ -50,6 +55,9 @@ def _optional_str(amount: Decimal | None) -> str | None:
 
 
 def _classification_out(outcome: ClassificationOutcome) -> ClassificationOut:
+    suggestion = (
+        outcome.suggestion if isinstance(outcome.suggestion, ProviderSuggestion) else None
+    )
     return ClassificationOut(
         display_category=outcome.display_category.value if outcome.display_category else None,
         outgoing_treatment=(
@@ -59,6 +67,17 @@ def _classification_out(outcome: ClassificationOutcome) -> ClassificationOut:
         taxonomy_version=outcome.taxonomy_version,
         requires_confirmation=outcome.requires_confirmation,
         reason_code=outcome.reason_code,
+        suggestion=(
+            ClassificationSuggestionOut(
+                display_category=suggestion.display_category.value,
+                outgoing_treatment=suggestion.outgoing_treatment.value,
+                confidence=str(suggestion.confidence),
+                reason=suggestion.reason,
+                requires_clarification=suggestion.requires_clarification,
+            )
+            if suggestion
+            else None
+        ),
     )
 
 
@@ -106,19 +125,24 @@ def _resolve_classifications(
     *,
     confirmed: dict[str, ClassificationOutcome],
     preferences: tuple[CustomerPreference, ...],
+    provider: ClassificationSuggestionProvider | None = None,
 ) -> dict[str, ClassificationOutcome]:
     """Work out where every classifiable entry currently stands.
 
     A classification the customer already confirmed wins. Otherwise the
-    deterministic workflow runs, which may still leave the entry unresolved.
-    No provider is involved at any point.
+    deterministic workflow runs before the optional provider, which can only
+    attach an unconfirmed proposal.
     """
     resolved: dict[str, ClassificationOutcome] = {}
     for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments):
         if entry.entry_id in confirmed:
             resolved[entry.entry_id] = confirmed[entry.entry_id]
             continue
-        resolved[entry.entry_id] = classify_outgoing(entry.description, preferences=preferences)
+        resolved[entry.entry_id] = classify_with_suggestions(
+            entry.description,
+            preferences=preferences,
+            provider=provider,
+        )
     return resolved
 
 

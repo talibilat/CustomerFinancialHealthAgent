@@ -547,6 +547,16 @@
               }
             ],
             "title": "Reason Code"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassificationSuggestionOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -560,6 +570,40 @@
           "reason_code"
         ],
         "title": "ClassificationOut"
+      },
+      "ClassificationSuggestionOut": {
+        "properties": {
+          "display_category": {
+            "type": "string",
+            "title": "Display Category"
+          },
+          "outgoing_treatment": {
+            "type": "string",
+            "title": "Outgoing Treatment"
+          },
+          "confidence": {
+            "type": "string",
+            "title": "Confidence"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "requires_clarification": {
+            "type": "boolean",
+            "title": "Requires Clarification"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "display_category",
+          "outgoing_treatment",
+          "confidence",
+          "reason",
+          "requires_clarification"
+        ],
+        "title": "ClassificationSuggestionOut"
       },
       "ComponentChangeOut": {
         "properties": {

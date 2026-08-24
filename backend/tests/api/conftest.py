@@ -48,5 +48,10 @@ def db_session(engine):
 @pytest.fixture()
 def client(engine):
     from customer_financial_health_api.api.app import app
+    from customer_financial_health_api.api.dependencies import get_classification_provider
 
-    return TestClient(app)
+    app.dependency_overrides[get_classification_provider] = lambda: None
+    try:
+        yield TestClient(app)
+    finally:
+        app.dependency_overrides.pop(get_classification_provider, None)
