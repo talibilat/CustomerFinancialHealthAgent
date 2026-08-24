@@ -666,6 +666,10 @@ export type OverviewResponse = {
      */
     customer_id: string;
     /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
      * Statement Period
      */
     statement_period: string;
@@ -707,6 +711,55 @@ export type OverviewResponse = {
     outgoing_entries: Array<MoneyEntryOut>;
     resilience: ResilienceOut;
     difficulty: DifficultyOut;
+    /**
+     * Deterministic Explanation
+     */
+    deterministic_explanation: string;
+    personalized_explanation: PersonalizedExplanationOut | null;
+};
+
+/**
+ * PersonalizedExplanationOut
+ */
+export type PersonalizedExplanationOut = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Deployment
+     */
+    deployment: string | null;
+    /**
+     * Prompt Version
+     */
+    prompt_version: string;
+    /**
+     * Schema Version
+     */
+    schema_version: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * PersonalizedExplanationRequest
+ */
+export type PersonalizedExplanationRequest = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
 };
 
 /**
@@ -1394,6 +1447,37 @@ export type GetOverviewOverviewGetResponses = {
 };
 
 export type GetOverviewOverviewGetResponse = GetOverviewOverviewGetResponses[keyof GetOverviewOverviewGetResponses];
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostData = {
+    body: PersonalizedExplanationRequest;
+    headers: {
+        /**
+         * Idempotency-Key
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/overview/personalized-explanation';
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostError = RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors[keyof RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors];
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonalizedExplanationOut;
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponse = RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses[keyof RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses];
 
 export type RetrieveFinancialStatementFinancialStatementGetData = {
     body?: never;

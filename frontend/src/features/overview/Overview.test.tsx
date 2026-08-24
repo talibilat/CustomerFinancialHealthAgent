@@ -1,24 +1,29 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 import { Overview } from './Overview'
-import { getOverviewOverviewGet } from '@/api/generated'
+import {
+  getOverviewOverviewGet,
+  requestPersonalizedExplanationOverviewPersonalizedExplanationPost,
+} from '@/api/generated'
 
 vi.mock('@/api/generated', () => ({
   getOverviewOverviewGet: vi.fn(),
+  requestPersonalizedExplanationOverviewPersonalizedExplanationPost: vi.fn(),
 }))
 
 function renderWithQueryClient() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <Overview />
     </QueryClientProvider>,
   )
+  return { ...rendered, queryClient }
 }
 
 function emptyResilience() {
@@ -35,12 +40,114 @@ function emptyResilience() {
 }
 
 const mockedGetOverview = vi.mocked(getOverviewOverviewGet)
+const mockedRequestExplanation = vi.mocked(
+  requestPersonalizedExplanationOverviewPersonalizedExplanationPost,
+)
 
 beforeEach(() => {
   mockedGetOverview.mockReset()
+  mockedRequestExplanation.mockReset()
 })
 
 describe('Overview', () => {
+  it('keeps deterministic content usable while optional wording is pending', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        snapshot_id: '00000000-0000-0000-0000-000000000001',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1950.00',
+        monthly_headroom: '500.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: emptyResilience(),
+        difficulty: {
+          result_code: 'no_difficulty_identified',
+          title: '',
+          explanation: '',
+          shortfall: null,
+          protected_monthly_outgoings: '0.00',
+          warnings: [],
+          support_routes: [],
+        },
+        deterministic_explanation:
+          'Reported monthly income is £2,450.00 and reported monthly outgoings are £1,950.00, leaving £500.00 of monthly headroom.',
+        personalized_explanation: null,
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+    mockedRequestExplanation.mockReturnValue(new Promise(() => {}) as never)
+
+    renderWithQueryClient()
+    await userEvent.click(await screen.findByRole('button', { name: /explain this more simply/i }))
+
+    expect(screen.getByText(/reported monthly income is £2,450.00/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /creating optional wording/i })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent(/creating optional wording/i)
+  })
+
+  it('renders accepted wording as text rather than markup', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        snapshot_id: '00000000-0000-0000-0000-000000000001',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '2450.00',
+        normalized_monthly_outgoings: '1950.00',
+        monthly_headroom: '500.00',
+        result_code: 'surplus',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: emptyResilience(),
+        difficulty: {
+          result_code: 'no_difficulty_identified',
+          title: '',
+          explanation: '',
+          shortfall: null,
+          protected_monthly_outgoings: '0.00',
+          warnings: [],
+          support_routes: [],
+        },
+        deterministic_explanation: 'Your deterministic explanation remains available.',
+        personalized_explanation: null,
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+    mockedRequestExplanation.mockResolvedValue({
+      data: {
+        snapshot_id: '00000000-0000-0000-0000-000000000001',
+        text: '<strong>Your reported figures leave £500.00.</strong>',
+        outcome: 'generated',
+        deployment: 'guidance-v1',
+        prompt_version: 'guidance-prompt-v1',
+        schema_version: 'guidance-schema-v1',
+        created_at: '2026-08-24T10:30:00Z',
+      },
+      error: undefined,
+      request: new Request('http://localhost/overview/personalized-explanation'),
+      response: new Response(null, { status: 200 }),
+    } as never)
+
+    renderWithQueryClient()
+    await userEvent.click(await screen.findByRole('button', { name: /explain this more simply/i }))
+
+    expect(await screen.findByText('<strong>Your reported figures leave £500.00.</strong>')).toBeInTheDocument()
+    expect(document.querySelector('strong')).not.toBeInTheDocument()
+    expect(screen.getByText(/your deterministic explanation remains available/i)).toBeInTheDocument()
+  })
+
   it('shows a loading state before data arrives', () => {
     mockedGetOverview.mockReturnValue(new Promise(() => {}) as never)
 
@@ -323,5 +430,62 @@ describe('Overview', () => {
     expect(result).toHaveTextContent(/exact monthly shortfall of £0.01/i)
     expect(screen.getByRole('link', { name: /free independent debt advice/i })).toHaveAttribute('target', '_blank')
     expect(document.body.textContent).not.toMatch(/disposable|failed affordability|must pay/i)
+  })
+
+  it('ignores wording that arrives after the overview moves to a newer snapshot', async () => {
+    const firstOverview = {
+      customer_id: 'c1',
+      snapshot_id: '00000000-0000-0000-0000-000000000001',
+      statement_period: '2026-08-01',
+      confirmed_at: '2026-08-01T09:00:00Z',
+      calculation_policy_version: 'normalization-policy-v1',
+      normalized_monthly_income: '2450.00',
+      normalized_monthly_outgoings: '1950.00',
+      monthly_headroom: '500.00',
+      result_code: 'surplus',
+      warnings: [],
+      income_entries: [],
+      outgoing_entries: [],
+      resilience: emptyResilience(),
+      difficulty: null,
+      deterministic_explanation: 'The first snapshot leaves £500.00 of monthly headroom.',
+      personalized_explanation: null,
+    }
+    const newerOverview = {
+      ...firstOverview,
+      snapshot_id: '00000000-0000-0000-0000-000000000002',
+      normalized_monthly_outgoings: '2050.00',
+      monthly_headroom: '400.00',
+      deterministic_explanation: 'The corrected snapshot leaves £400.00 of monthly headroom.',
+    }
+    mockedGetOverview.mockResolvedValue({ data: firstOverview } as never)
+    let resolveExplanation: (value: unknown) => void = () => undefined
+    mockedRequestExplanation.mockReturnValue(
+      new Promise((resolve) => {
+        resolveExplanation = resolve
+      }) as never,
+    )
+
+    const { queryClient } = renderWithQueryClient()
+    await userEvent.click(await screen.findByRole('button', { name: /explain this more simply/i }))
+    act(() => queryClient.setQueryData(['overview'], newerOverview))
+    expect(await screen.findByText(/corrected snapshot leaves £400.00/i)).toBeInTheDocument()
+
+    await act(async () => {
+      resolveExplanation({
+        data: {
+          snapshot_id: firstOverview.snapshot_id,
+          text: 'Late wording for the first snapshot.',
+          outcome: 'generated',
+          deployment: 'guidance-v1',
+          prompt_version: 'guidance-prompt-v1',
+          schema_version: 'guidance-schema-v1',
+          created_at: '2026-08-24T10:30:00Z',
+        },
+      })
+    })
+
+    expect(screen.queryByText('Late wording for the first snapshot.')).not.toBeInTheDocument()
+    expect(screen.getByText(/corrected snapshot leaves £400.00/i)).toBeInTheDocument()
   })
 })

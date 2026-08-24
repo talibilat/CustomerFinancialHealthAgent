@@ -20,6 +20,7 @@ def test_overview_returns_closed_schema_for_seeded_customer(client, db_session):
 
     assert set(body.keys()) == {
         "customer_id",
+        "snapshot_id",
         "statement_period",
         "confirmed_at",
         "calculation_policy_version",
@@ -32,6 +33,8 @@ def test_overview_returns_closed_schema_for_seeded_customer(client, db_session):
         "outgoing_entries",
         "resilience",
         "difficulty",
+        "deterministic_explanation",
+        "personalized_explanation",
     }
     assert body["normalized_monthly_income"] == "2450.00"
     assert body["result_code"] in {"surplus", "balanced", "shortfall"}

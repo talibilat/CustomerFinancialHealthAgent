@@ -2,6 +2,20 @@ import { expect, test } from '@playwright/test'
 
 const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL ?? 'http://localhost:8000'
 
+test.beforeEach(async ({ request }) => {
+  // Force a transition before loading the stable statement fixture because
+  // selecting the already-active preset is intentionally idempotent.
+  const transition = await request.post(`${apiBaseUrl}/demo/reset`, {
+    data: { preset: 'zero_income', confirmed_reset: true },
+  })
+  expect(transition.ok()).toBeTruthy()
+
+  const reset = await request.post(`${apiBaseUrl}/demo/reset`, {
+    data: { preset: 'repayment_near_buffer', confirmed_reset: true },
+  })
+  expect(reset.ok()).toBeTruthy()
+})
+
 test('edits and previews a statement without changing confirmed history', async ({ page, request }) => {
   const confirmedBefore = await request.get(`${apiBaseUrl}/overview`)
   expect(confirmedBefore.ok()).toBeTruthy()
