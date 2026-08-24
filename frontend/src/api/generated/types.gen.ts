@@ -170,6 +170,103 @@ export type ConfirmedSnapshotResponse = {
 };
 
 /**
+ * CorrectedSnapshotResponse
+ */
+export type CorrectedSnapshotResponse = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Confirmed At
+     */
+    confirmed_at: string;
+    /**
+     * Calculation Policy Version
+     */
+    calculation_policy_version: string;
+    /**
+     * Taxonomy Version
+     */
+    taxonomy_version: string;
+    /**
+     * Normalized Monthly Income
+     */
+    normalized_monthly_income: string;
+    /**
+     * Normalized Monthly Outgoings
+     */
+    normalized_monthly_outgoings: string;
+    /**
+     * Monthly Headroom
+     */
+    monthly_headroom: string;
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Income Entries
+     */
+    income_entries: Array<StatementEntryOut>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries: Array<StatementEntryOut>;
+    resilience: ResilienceOut;
+    /**
+     * Supersedes Snapshot Id
+     */
+    supersedes_snapshot_id: string;
+    /**
+     * Correction Reason
+     */
+    correction_reason: string;
+};
+
+/**
+ * CorrectionRequest
+ *
+ * A corrected statement replacing a confirmed snapshot.
+ */
+export type CorrectionRequest = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Currency
+     */
+    currency?: string;
+    /**
+     * Income Entries
+     */
+    income_entries?: Array<StatementEntryIn>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries?: Array<StatementEntryIn>;
+    /**
+     * Repayment Commitments
+     */
+    repayment_commitments?: Array<StatementEntryIn>;
+    resilience?: ResilienceIn;
+    looking_ahead?: LookingAheadIn;
+    /**
+     * Correction Reason
+     */
+    correction_reason: string;
+};
+
+/**
  * EditableStatementOut
  */
 export type EditableStatementOut = {
@@ -321,6 +418,18 @@ export type HistorySnapshotOut = {
      * Confirmed At
      */
     confirmed_at: string;
+    /**
+     * Supersedes Snapshot Id
+     */
+    supersedes_snapshot_id: string | null;
+    /**
+     * Correction Reason
+     */
+    correction_reason: string | null;
+    /**
+     * Is Effective
+     */
+    is_effective: boolean;
     /**
      * Calculation Policy Version
      */
@@ -548,6 +657,10 @@ export type ResilienceSectionOut = {
  * SeriesPointOut
  */
 export type SeriesPointOut = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
     /**
      * Statement Period
      */
@@ -1003,3 +1116,39 @@ export type GetHistoryHistoryGetResponses = {
 };
 
 export type GetHistoryHistoryGetResponse = GetHistoryHistoryGetResponses[keyof GetHistoryHistoryGetResponses];
+
+export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData = {
+    body: CorrectionRequest;
+    headers: {
+        /**
+         * Idempotency-Key
+         */
+        'Idempotency-Key': string;
+    };
+    path: {
+        /**
+         * Snapshot Id
+         */
+        snapshot_id: string;
+    };
+    query?: never;
+    url: '/history/{snapshot_id}/correct';
+};
+
+export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostError = CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors[keyof CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors];
+
+export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses = {
+    /**
+     * Successful Response
+     */
+    201: CorrectedSnapshotResponse;
+};
+
+export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponse = CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses[keyof CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses];

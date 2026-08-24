@@ -84,6 +84,8 @@ class ConfirmedSnapshotView:
     income_entries: tuple[SnapshotEntryView, ...]
     outgoing_entries: tuple[SnapshotEntryView, ...]
     resilience: ResilienceResult
+    supersedes_snapshot_id: uuid.UUID | None = None
+    correction_reason: str | None = None
 
 
 class StaleStatementVersion(Exception):
@@ -234,6 +236,8 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
             )
             for e in snapshot.outgoing_entries
         ),
+        supersedes_snapshot_id=snapshot.supersedes_snapshot_id,
+        correction_reason=snapshot.correction_reason,
         resilience=ResilienceResult(
             accessible_savings=snapshot.accessible_savings,
             protected_reserve=snapshot.protected_reserve,
@@ -745,3 +749,136 @@ def list_effective_series(
         by_period[row.statement_period] = row
 
     return tuple(_to_view(by_period[period]) for period in sorted(by_period))
+
+
+MAX_CORRECTION_REASON_LENGTH = 500
+
+
+class CorrectionReasonInvalid(Exception):
+    """Raised when a correction is attempted without a usable reason."""
+
+
+class SnapshotAlreadySuperseded(Exception):
+    """Raised when correcting a snapshot another correction already replaced."""
+
+    def __init__(self, *, snapshot_id: uuid.UUID, successor_id: uuid.UUID | None = None):
+        self.snapshot_id = snapshot_id
+        self.successor_id = successor_id
+        super().__init__("this snapshot has already been corrected")
+
+
+class SnapshotNotFound(Exception):
+    """Raised when a snapshot does not exist, or is not this customer's.
+
+    Deliberately one exception for both, so a caller cannot tell another
+    customer's snapshot apart from one that never existed.
+    """
+
+
+def correct_snapshot(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    supersedes_snapshot_id: uuid.UUID,
+    statement: FinancialStatement,
+    classifications: dict[str, ClassificationOutcome],
+    correction_reason: str,
+    idempotency_key: str,
+    confirmed_at: datetime,
+) -> ConfirmedSnapshotView:
+    """Record a correction as a new snapshot that supersedes an earlier one.
+
+    The original is never edited or deleted. The correction keeps the period the
+    original described, even when it is confirmed in a later calendar month, and
+    becomes the effective snapshot for that period.
+    """
+    reason = (correction_reason or "").strip()
+    if not reason:
+        raise CorrectionReasonInvalid("a correction needs a reason")
+    if len(reason) > MAX_CORRECTION_REASON_LENGTH:
+        raise CorrectionReasonInvalid(
+            f"a correction reason must be {MAX_CORRECTION_REASON_LENGTH} characters or fewer"
+        )
+
+    fingerprint = _confirmation_fingerprint(statement, classifications)
+    existing = session.execute(
+        select(ConfirmationIdempotencyKey).where(
+            ConfirmationIdempotencyKey.customer_id == customer_id,
+            ConfirmationIdempotencyKey.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different correction"
+            )
+        return _to_view(session.get(ConfirmedSnapshot, existing.snapshot_id))
+
+    # Lock the snapshot being corrected so two concurrent corrections cannot
+    # both find it uncorrected. Ownership is checked here too: another
+    # customer's snapshot is indistinguishable from one that does not exist.
+    original = session.execute(
+        select(ConfirmedSnapshot)
+        .where(
+            ConfirmedSnapshot.id == supersedes_snapshot_id,
+            ConfirmedSnapshot.customer_id == customer_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if original is None:
+        raise SnapshotNotFound("no such snapshot")
+
+    successor = session.execute(
+        select(ConfirmedSnapshot).where(
+            ConfirmedSnapshot.supersedes_snapshot_id == supersedes_snapshot_id
+        )
+    ).scalar_one_or_none()
+    if successor is not None:
+        raise SnapshotAlreadySuperseded(
+            snapshot_id=supersedes_snapshot_id, successor_id=successor.id
+        )
+
+    outgoings = list(statement.outgoing_entries) + list(statement.repayment_commitments)
+    unresolved = [
+        entry.entry_id
+        for entry in outgoings
+        if not (entry.entry_id in classifications and classifications[entry.entry_id].is_resolved)
+    ]
+    if unresolved:
+        raise UnresolvedClassifications(unresolved)
+
+    position = calculate_monthly_position(
+        income_entries=[entry.as_money_entry() for entry in statement.income_entries],
+        outgoing_entries=[entry.as_money_entry() for entry in outgoings],
+    )
+    resilience = calculate_resilience(
+        accessible_savings=statement.resilience.accessible_savings,
+        protected_reserve=statement.resilience.protected_reserve,
+        current_account_balance=statement.resilience.current_account_balance,
+        known_arrears=statement.resilience.known_arrears,
+    )
+
+    correction = save_confirmed_snapshot(
+        session,
+        customer_id=customer_id,
+        # The period the original described, not the month it was corrected in.
+        statement_period=original.statement_period,
+        confirmed_at=confirmed_at,
+        position=position,
+        income_entries=list(statement.income_entries),
+        outgoing_entries=outgoings,
+        resilience=resilience,
+        classifications=classifications,
+        supersedes_snapshot_id=original.id,
+    )
+    correction.correction_reason = reason
+
+    _record_idempotent_confirmation(
+        session,
+        customer_id=customer_id,
+        idempotency_key=idempotency_key,
+        fingerprint=fingerprint,
+        snapshot_id=correction.id,
+    )
+
+    return _to_view(correction)

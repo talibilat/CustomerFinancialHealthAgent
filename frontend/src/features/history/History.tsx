@@ -1,12 +1,16 @@
 import { useState } from 'react'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
-import { getHistoryHistoryGet } from '@/api/generated'
+import {
+  correctConfirmedSnapshotHistorySnapshotIdCorrectPost,
+  getHistoryHistoryGet,
+} from '@/api/generated'
 import type { ChangeExplanationOut, HistoryResponse } from '@/api/generated'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatGbp, formatPeriod } from '@/lib/format'
 
@@ -175,6 +179,7 @@ function RecordsTable({
               <th scope="col" className="py-2 pr-4 font-medium">Period</th>
               <th scope="col" className="py-2 pr-4 font-medium">Confirmed</th>
               <th scope="col" className="py-2 pr-4 font-medium">Monthly headroom</th>
+              <th scope="col" className="py-2 pr-4 font-medium">Status</th>
               <th scope="col" className="py-2 pr-4 font-medium">Calculated with</th>
             </tr>
           </thead>
@@ -188,6 +193,16 @@ function RecordsTable({
                   {new Date(snapshot.confirmed_at).toLocaleDateString('en-GB')}
                 </td>
                 <td className="py-2 pr-4 font-medium">{formatGbp(snapshot.monthly_headroom)}</td>
+                <td className="py-2 pr-4 text-muted-foreground">
+                  {snapshot.is_effective ? (
+                    <span>In effect</span>
+                  ) : (
+                    <span>Superseded by a later correction</span>
+                  )}
+                  {snapshot.correction_reason && (
+                    <span className="block">Reason given: {snapshot.correction_reason}</span>
+                  )}
+                </td>
                 <td className="py-2 pr-4 text-muted-foreground">
                   {snapshot.calculation_policy_version}
                 </td>
@@ -218,6 +233,7 @@ function RecordsTable({
 
 export function History() {
   const [offset, setOffset] = useState(0)
+  const queryClient = useQueryClient()
 
   const query = useQuery({
     queryKey: ['history', offset],
@@ -279,6 +295,24 @@ export function History() {
     <div className="mx-auto w-full max-w-3xl space-y-6">
       {change && <ChangeSummary change={change} />}
       <SeriesTable series={series} />
+
+      {series.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Something not right?</CardTitle>
+            <CardDescription>
+              You can correct the record currently in effect. Nothing is ever overwritten.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CorrectionPanel
+              snapshotId={series[series.length - 1].snapshot_id}
+              period={series[series.length - 1].statement_period}
+              onDone={() => queryClient.invalidateQueries({ queryKey: ['history'] })}
+            />
+          </CardContent>
+        </Card>
+      )}
       <RecordsTable
         snapshots={snapshots}
         total={total}
@@ -286,6 +320,101 @@ export function History() {
         onOlder={() => setOffset(offset + PAGE_SIZE)}
         onNewer={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
       />
+    </div>
+  )
+}
+
+function CorrectionPanel({
+  snapshotId,
+  period,
+  onDone,
+}: {
+  snapshotId: string
+  period: string
+  onDone: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [reason, setReason] = useState('')
+  const [conflict, setConflict] = useState<string | null>(null)
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const result = await correctConfirmedSnapshotHistorySnapshotIdCorrectPost({
+        path: { snapshot_id: snapshotId },
+        body: { correction_reason: reason } as never,
+        headers: { 'Idempotency-Key': `correct-${snapshotId}-${reason.length}` },
+      })
+      if (result.error || !result.data) {
+        const detail = (result.error as { detail?: { message?: string } })?.detail
+        setConflict(detail?.message ?? 'We could not save that correction. Please try again.')
+        throw new Error('correction_rejected')
+      }
+      return result.data
+    },
+    onMutate: () => setConflict(null),
+    onSuccess: () => {
+      setOpen(false)
+      setReason('')
+      onDone()
+    },
+  })
+
+  if (!open) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        aria-label={`Correct the ${formatPeriod(period)} record`}
+        onClick={() => setOpen(true)}
+      >
+        Correct this record
+      </Button>
+    )
+  }
+
+  return (
+    <div className="space-y-3 rounded-lg border p-4">
+      <div>
+        <h3 className="font-medium">Correct the {formatPeriod(period)} record</h3>
+        <p className="text-sm text-muted-foreground">
+          Correcting adds a new record for this period. The original stays in your history so the
+          change is always visible.
+        </p>
+      </div>
+
+      <div>
+        <label className="text-sm text-muted-foreground" htmlFor="correction-reason">
+          What was wrong?
+        </label>
+        <Input
+          id="correction-reason"
+          type="text"
+          aria-label="What was wrong"
+          value={reason}
+          onChange={(event) => setReason(event.target.value)}
+        />
+      </div>
+
+      {conflict && (
+        <Alert>
+          <Info />
+          <AlertTitle>This record changed</AlertTitle>
+          <AlertDescription>{conflict}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          disabled={!reason.trim() || mutation.isPending}
+          onClick={() => mutation.mutate()}
+        >
+          Save this correction
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+          Cancel
+        </Button>
+      </div>
     </div>
   )
 }

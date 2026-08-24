@@ -58,81 +58,26 @@ from customer_financial_health_api.persistence.repository import (
     save_editable_statement,
 )
 
+from customer_financial_health_api.api.statement_support import (
+    _changes_out,
+    _classification_out,
+    _current_customer,
+    _entries_out,
+    _optional_str,
+    _rejected,
+    _resolve_classifications,
+    _snapshot_entries_out,
+    _submitted_classifications,
+    _validated,
+    confirmed_response,
+)
+
 router = APIRouter(prefix="/financial-statement", tags=["financial-statement"])
 
 
-def _optional_str(amount: Decimal | None) -> str | None:
-    return str(amount) if amount is not None else None
 
 
-def _classification_out(outcome: ClassificationOutcome) -> ClassificationOut:
-    return ClassificationOut(
-        display_category=outcome.display_category.value if outcome.display_category else None,
-        outgoing_treatment=(
-            outcome.outgoing_treatment.value if outcome.outgoing_treatment else None
-        ),
-        source=outcome.source.value if outcome.source else None,
-        taxonomy_version=outcome.taxonomy_version,
-        requires_confirmation=outcome.requires_confirmation,
-        reason_code=outcome.reason_code,
-    )
 
-
-def _entries_out(
-    entries: tuple[StatementEntry, ...],
-    classifications: dict[str, ClassificationOutcome] | None = None,
-) -> list[StatementEntryOut]:
-    resolved = classifications or {}
-    return [
-        StatementEntryOut(
-            entry_id=entry.entry_id,
-            description=entry.description,
-            original_amount=str(entry.amount),
-            original_frequency=entry.frequency.value,
-            normalized_monthly_amount=str(entry.normalized_monthly_amount),
-            classification=(
-                _classification_out(resolved[entry.entry_id])
-                if entry.entry_id in resolved
-                else None
-            ),
-        )
-        for entry in entries
-    ]
-
-
-def _changes_out(changes: tuple[ExpectedChange, ...]) -> list[ExpectedChangeOut]:
-    return [
-        ExpectedChangeOut(
-            entry_id=change.entry_id,
-            description=change.description,
-            kind=change.kind.value,
-            original_amount=str(change.amount),
-            original_frequency=change.frequency.value,
-            normalized_monthly_amount=str(change.normalized_monthly_amount),
-        )
-        for change in changes
-    ]
-
-
-def _resolve_classifications(
-    statement: FinancialStatement,
-    *,
-    confirmed: dict[str, ClassificationOutcome],
-    preferences: tuple[CustomerPreference, ...],
-) -> dict[str, ClassificationOutcome]:
-    """Work out where every classifiable entry currently stands.
-
-    A classification the customer already confirmed wins. Otherwise the
-    deterministic workflow runs, which may still leave the entry unresolved.
-    No provider is involved at any point.
-    """
-    resolved: dict[str, ClassificationOutcome] = {}
-    for entry in list(statement.outgoing_entries) + list(statement.repayment_commitments):
-        if entry.entry_id in confirmed:
-            resolved[entry.entry_id] = confirmed[entry.entry_id]
-            continue
-        resolved[entry.entry_id] = classify_outgoing(entry.description, preferences=preferences)
-    return resolved
 
 
 def _statement_out(
@@ -174,101 +119,8 @@ def _statement_response(
     )
 
 
-def _rejected(errors: list[FieldError]) -> HTTPException:
-    return HTTPException(
-        status_code=422,
-        detail={
-            "code": "statement_invalid",
-            "message": "Nothing was saved. Check the highlighted fields and try again.",
-            "errors": [
-                {"field": error.field, "code": error.code, "message": error.message}
-                for error in errors
-            ],
-        },
-    )
 
 
-def _validated(submission: StatementSubmission) -> FinancialStatement:
-    """Validate a submission, translating field errors into one safe response."""
-    payload = submission.model_dump(exclude={"expected_version"})
-    try:
-        return validate_statement(payload)
-    except StatementValidationError as invalid:
-        raise _rejected(list(invalid.errors)) from invalid
-
-
-def _submitted_classifications(
-    submission: StatementSubmission,
-) -> tuple[dict[str, ClassificationOutcome], list[tuple[str, ClassificationOutcome]]]:
-    """Read the classifications the customer accepted or corrected.
-
-    Returns the confirmed outcomes keyed by entry id, plus the subset the
-    customer asked to remember as a preference. Unsupported categories and
-    treatments are refused against their own field.
-    """
-    errors: list[FieldError] = []
-    confirmed: dict[str, ClassificationOutcome] = {}
-    remember: list[tuple[str, ClassificationOutcome]] = []
-
-    sections = (
-        ("outgoing_entries", submission.outgoing_entries),
-        ("repayment_commitments", submission.repayment_commitments),
-    )
-    for prefix, entries in sections:
-        for index, entry in enumerate(entries):
-            if entry.classification is None:
-                continue
-            path = f"{prefix}.{index}.classification"
-
-            try:
-                category = DisplayCategory(entry.classification.display_category)
-            except ValueError:
-                errors.append(
-                    FieldError(
-                        f"{path}.display_category",
-                        "category_not_supported",
-                        "Choose one of the supported categories.",
-                    )
-                )
-                category = None
-            try:
-                treatment = OutgoingTreatment(entry.classification.outgoing_treatment)
-            except ValueError:
-                errors.append(
-                    FieldError(
-                        f"{path}.outgoing_treatment",
-                        "treatment_not_supported",
-                        "Choose one of the supported treatments.",
-                    )
-                )
-                treatment = None
-
-            if category is None or treatment is None:
-                continue
-
-            entry_id = entry.entry_id or f"{prefix}-{index}"
-            outcome = ClassificationOutcome(
-                normalized_description=normalize_description(entry.description),
-                display_category=None,
-                outgoing_treatment=None,
-                source=None,
-                reason_code=None,
-            ).confirmed_as(display_category=category, outgoing_treatment=treatment)
-            confirmed[entry_id] = outcome
-            if entry.classification.remember:
-                remember.append((entry_id, outcome))
-
-    if errors:
-        raise _rejected(errors)
-
-    return confirmed, remember
-
-
-def _current_customer(session: Session):
-    customer = get_demo_customer(session)
-    if customer is None:
-        raise HTTPException(status_code=404, detail="no_customer_data")
-    return customer
 
 
 @router.get("", response_model=EditableStatementResponse)
@@ -408,36 +260,6 @@ def preview_financial_statement(
         can_confirm=not unresolved,
     )
 
-
-def _snapshot_entries_out(entries) -> list[StatementEntryOut]:
-    return [
-        StatementEntryOut(
-            entry_id=str(index),
-            description=entry.description or "",
-            original_amount=str(entry.original_amount),
-            original_frequency=entry.original_frequency.value,
-            normalized_monthly_amount=str(entry.normalized_monthly_amount),
-            classification=(
-                ClassificationOut(
-                    display_category=(
-                        entry.display_category.value if entry.display_category else None
-                    ),
-                    outgoing_treatment=(
-                        entry.outgoing_treatment.value if entry.outgoing_treatment else None
-                    ),
-                    source=(
-                        entry.classification_source.value if entry.classification_source else None
-                    ),
-                    taxonomy_version=entry.taxonomy_version or TAXONOMY_VERSION,
-                    requires_confirmation=False,
-                    reason_code=None,
-                )
-                if entry.display_category is not None
-                else None
-            ),
-        )
-        for index, entry in enumerate(entries)
-    ]
 
 
 @router.post("/confirm", response_model=ConfirmedSnapshotResponse, status_code=201)

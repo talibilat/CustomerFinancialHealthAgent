@@ -293,6 +293,68 @@
           }
         }
       }
+    },
+    "/history/{snapshot_id}/correct": {
+      "post": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Correct Confirmed Snapshot",
+        "operationId": "correct_confirmed_snapshot_history__snapshot_id__correct_post",
+        "parameters": [
+          {
+            "name": "snapshot_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Snapshot Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectedSnapshotResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -576,6 +638,152 @@
         ],
         "title": "ConfirmedSnapshotResponse"
       },
+      "CorrectedSnapshotResponse": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "title": "Snapshot Id"
+          },
+          "statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Period"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Confirmed At"
+          },
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "taxonomy_version": {
+            "type": "string",
+            "title": "Taxonomy Version"
+          },
+          "normalized_monthly_income": {
+            "type": "string",
+            "title": "Normalized Monthly Income"
+          },
+          "normalized_monthly_outgoings": {
+            "type": "string",
+            "title": "Normalized Monthly Outgoings"
+          },
+          "monthly_headroom": {
+            "type": "string",
+            "title": "Monthly Headroom"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceOut"
+          },
+          "supersedes_snapshot_id": {
+            "type": "string",
+            "title": "Supersedes Snapshot Id"
+          },
+          "correction_reason": {
+            "type": "string",
+            "title": "Correction Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "statement_period",
+          "confirmed_at",
+          "calculation_policy_version",
+          "taxonomy_version",
+          "normalized_monthly_income",
+          "normalized_monthly_outgoings",
+          "monthly_headroom",
+          "result_code",
+          "warnings",
+          "income_entries",
+          "outgoing_entries",
+          "resilience",
+          "supersedes_snapshot_id",
+          "correction_reason"
+        ],
+        "title": "CorrectedSnapshotResponse"
+      },
+      "CorrectionRequest": {
+        "properties": {
+          "statement_period": {
+            "type": "string",
+            "title": "Statement Period"
+          },
+          "currency": {
+            "type": "string",
+            "title": "Currency",
+            "default": "GBP"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          },
+          "repayment_commitments": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryIn"
+            },
+            "type": "array",
+            "title": "Repayment Commitments"
+          },
+          "resilience": {
+            "$ref": "#/components/schemas/ResilienceIn"
+          },
+          "looking_ahead": {
+            "$ref": "#/components/schemas/LookingAheadIn"
+          },
+          "correction_reason": {
+            "type": "string",
+            "title": "Correction Reason"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement_period",
+          "correction_reason"
+        ],
+        "title": "CorrectionRequest",
+        "description": "A corrected statement replacing a confirmed snapshot."
+      },
       "EditableStatementOut": {
         "properties": {
           "statement_period": {
@@ -811,6 +1019,32 @@
             "format": "date-time",
             "title": "Confirmed At"
           },
+          "supersedes_snapshot_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Snapshot Id"
+          },
+          "correction_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correction Reason"
+          },
+          "is_effective": {
+            "type": "boolean",
+            "title": "Is Effective"
+          },
           "calculation_policy_version": {
             "type": "string",
             "title": "Calculation Policy Version"
@@ -859,6 +1093,9 @@
           "snapshot_id",
           "statement_period",
           "confirmed_at",
+          "supersedes_snapshot_id",
+          "correction_reason",
+          "is_effective",
           "calculation_policy_version",
           "normalized_monthly_income",
           "normalized_monthly_outgoings",
@@ -1246,6 +1483,10 @@
       },
       "SeriesPointOut": {
         "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "title": "Snapshot Id"
+          },
           "statement_period": {
             "type": "string",
             "format": "date",
@@ -1271,6 +1512,7 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "snapshot_id",
           "statement_period",
           "normalized_monthly_income",
           "normalized_monthly_outgoings",

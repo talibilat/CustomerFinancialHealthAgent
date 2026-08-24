@@ -5,12 +5,17 @@ recalculated with today's policy, and no provider is involved in choosing or
 wording the explanation.
 """
 
-from fastapi import APIRouter, Depends, Query
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.dependencies import get_db
 from customer_financial_health_api.api.schemas import (
     ChangeExplanationOut,
+    CorrectedSnapshotResponse,
+    CorrectionRequest,
     ClassificationOut,
     ComponentChangeOut,
     HistoryResponse,
@@ -26,8 +31,23 @@ from customer_financial_health_api.domain.history import (
     ReportedComponent,
     explain_change,
 )
+from customer_financial_health_api.api.statement_support import (
+    _rejected,
+    _resolve_classifications,
+    _submitted_classifications,
+    _validated,
+    confirmed_response,
+)
+from customer_financial_health_api.domain.statement import FieldError
 from customer_financial_health_api.persistence.repository import (
     ConfirmedSnapshotView,
+    CorrectionReasonInvalid,
+    IdempotencyConflict,
+    SnapshotAlreadySuperseded,
+    SnapshotNotFound,
+    UnresolvedClassifications,
+    correct_snapshot,
+    get_customer_preferences,
     get_demo_customer,
     list_confirmed_history,
     list_effective_series,
@@ -66,11 +86,18 @@ def _entries_out(entries, *, classified: bool) -> list[StatementEntryOut]:
     ]
 
 
-def _snapshot_out(snapshot: ConfirmedSnapshotView) -> HistorySnapshotOut:
+def _snapshot_out(
+    snapshot: ConfirmedSnapshotView, effective_ids: set
+) -> HistorySnapshotOut:
     return HistorySnapshotOut(
         snapshot_id=str(snapshot.id),
         statement_period=snapshot.statement_period,
         confirmed_at=snapshot.confirmed_at,
+        supersedes_snapshot_id=(
+            str(snapshot.supersedes_snapshot_id) if snapshot.supersedes_snapshot_id else None
+        ),
+        correction_reason=snapshot.correction_reason,
+        is_effective=snapshot.id in effective_ids,
         calculation_policy_version=snapshot.calculation_policy_version,
         normalized_monthly_income=str(snapshot.normalized_monthly_income),
         normalized_monthly_outgoings=str(snapshot.normalized_monthly_outgoings),
@@ -151,6 +178,7 @@ def get_history(
         session, customer_id=customer.id, limit=limit, offset=offset
     )
     series = list_effective_series(session, customer_id=customer.id)
+    effective_ids = {s.id for s in series}
 
     # The explanation compares the two most recent effective periods, so it does
     # not change with the page the customer happens to be reading.
@@ -167,9 +195,10 @@ def get_history(
         total=page.total,
         limit=page.limit,
         offset=page.offset,
-        snapshots=[_snapshot_out(s) for s in page.snapshots],
+        snapshots=[_snapshot_out(s, effective_ids) for s in page.snapshots],
         series=[
             SeriesPointOut(
+                snapshot_id=str(s.id),
                 statement_period=s.statement_period,
                 normalized_monthly_income=str(s.normalized_monthly_income),
                 normalized_monthly_outgoings=str(s.normalized_monthly_outgoings),
@@ -179,4 +208,90 @@ def get_history(
             for s in series
         ],
         latest_change=latest_change,
+    )
+
+
+@router.post(
+    "/{snapshot_id}/correct", response_model=CorrectedSnapshotResponse, status_code=201
+)
+def correct_confirmed_snapshot(
+    snapshot_id: uuid.UUID,
+    submission: CorrectionRequest,
+    idempotency_key: str = Header(..., alias="Idempotency-Key"),
+    session: Session = Depends(get_db),
+) -> CorrectedSnapshotResponse:
+    customer = get_demo_customer(session)
+    if customer is None:
+        raise HTTPException(status_code=404, detail="snapshot_not_found")
+
+    statement = _validated(submission)
+    confirmed, _ = _submitted_classifications(submission)
+    preferences = get_customer_preferences(session, customer_id=customer.id)
+    classifications = _resolve_classifications(
+        statement, confirmed=confirmed, preferences=preferences
+    )
+
+    try:
+        correction = correct_snapshot(
+            session,
+            customer_id=customer.id,
+            supersedes_snapshot_id=snapshot_id,
+            statement=statement,
+            classifications=classifications,
+            correction_reason=submission.correction_reason,
+            idempotency_key=idempotency_key,
+            confirmed_at=datetime.now(timezone.utc),
+        )
+    except CorrectionReasonInvalid as invalid:
+        session.rollback()
+        raise _rejected(
+            [
+                FieldError(
+                    "correction_reason",
+                    "correction_reason_invalid",
+                    "Tell us briefly what was wrong, in 500 characters or fewer.",
+                )
+            ]
+        ) from invalid
+    except SnapshotNotFound as missing:
+        session.rollback()
+        # The same response as a snapshot that never existed, so ownership
+        # cannot be probed by trying identifiers.
+        raise HTTPException(status_code=404, detail="snapshot_not_found") from missing
+    except SnapshotAlreadySuperseded as superseded:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "snapshot_already_superseded",
+                "message": "This record has already been corrected. Refresh your history.",
+            },
+        ) from superseded
+    except UnresolvedClassifications as unresolved:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "classifications_unresolved",
+                "message": "Tell us what each outgoing was for before correcting this.",
+                "entry_ids": list(unresolved.entry_ids),
+            },
+        ) from unresolved
+    except IdempotencyConflict as conflict:
+        session.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "idempotency_key_conflict",
+                "message": "This correction reference was already used for a different change.",
+            },
+        ) from conflict
+
+    session.commit()
+
+    base = confirmed_response(correction)
+    return CorrectedSnapshotResponse(
+        **base.model_dump(),
+        supersedes_snapshot_id=str(correction.supersedes_snapshot_id),
+        correction_reason=correction.correction_reason or "",
     )
