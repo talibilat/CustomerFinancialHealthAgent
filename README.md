@@ -13,6 +13,7 @@ The first tracer-bullet slice is implemented and verified: Docker Compose starts
 Financial resilience is also implemented: the overview separately shows accessible savings, protected reserve, current-account balance, and known arrears, with a below/at/above-reserve result that never changes the monthly cash-flow figures above it.
 Outgoings are classified deterministically: a customer's own remembered correction wins, then global whole-phrase rules, and anything unknown or ambiguous is left for the customer rather than guessed. Azure OpenAI is not involved.
 The update flow is implemented as well: the customer can review and change their editable financial statement, add and remove income, outgoings, existing repayment commitments, irregular costs, and protected future provisions, supply or omit resilience information, and preview the recalculated position without confirming anything or changing history.
+A confirmed record can be corrected by creating a new snapshot that supersedes it; the original is never edited or deleted and stays visible in history with the reason given.
 History lists every confirmed record with the policy version, labels, and categories that were stored at the time, and explains changes by decomposing them into reported amounts that reconcile exactly to the change in monthly headroom, without ever inferring a cause.
 A reviewed statement can be confirmed as an immutable snapshot in one atomic transaction, with a retry or double-click returning the original record rather than duplicating history.
 Unusable values are refused against their own field, an invalid submission preserves everything entered and states that nothing was saved, and a submission built from a superseded version returns a conflict the customer can refresh from.
@@ -93,9 +94,10 @@ cd ../frontend && npm run generate-client
 7. **Done.** Add an ambiguous outgoing such as `Apple`. It refuses to guess, asks what it was for, and can remember the answer so the same wording resolves next time regardless of case, spacing, or punctuation.
 8. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
 9. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
-10. Planned: explore and save a repayment scenario without modifying the statement.
-11. Planned: request an optional personalized explanation.
-12. Planned: load a zero-income, shortfall, correction, or AI-unavailable demonstration state.
+10. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
+11. Planned: explore and save a repayment scenario without modifying the statement.
+12. Planned: request an optional personalized explanation.
+13. Planned: load a zero-income, shortfall, or AI-unavailable demonstration state.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 

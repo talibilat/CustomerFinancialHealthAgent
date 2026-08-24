@@ -4,11 +4,18 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { History } from './History'
-import { getHistoryHistoryGet } from '@/api/generated'
+import {
+  correctConfirmedSnapshotHistorySnapshotIdCorrectPost,
+  getHistoryHistoryGet,
+} from '@/api/generated'
 
-vi.mock('@/api/generated', () => ({ getHistoryHistoryGet: vi.fn() }))
+vi.mock('@/api/generated', () => ({
+  getHistoryHistoryGet: vi.fn(),
+  correctConfirmedSnapshotHistorySnapshotIdCorrectPost: vi.fn(),
+}))
 
 const getHistory = vi.mocked(getHistoryHistoryGet)
+const correctSnapshot = vi.mocked(correctConfirmedSnapshotHistorySnapshotIdCorrectPost)
 
 function ok(data: unknown) {
   return {
@@ -21,6 +28,9 @@ function ok(data: unknown) {
 
 function snapshot(period: string, headroom: string, income: string, outgoings: string) {
   return {
+    supersedes_snapshot_id: null as string | null,
+    correction_reason: null as string | null,
+    is_effective: true,
     snapshot_id: `snap-${period}`,
     statement_period: period,
     confirmed_at: `${period}T09:00:00Z`,
@@ -37,6 +47,7 @@ function snapshot(period: string, headroom: string, income: string, outgoings: s
 
 function seriesPoint(period: string, headroom: string) {
   return {
+    snapshot_id: `snap-${period}`,
     statement_period: period,
     normalized_monthly_income: '2450.00',
     normalized_monthly_outgoings: '950.00',
@@ -95,6 +106,7 @@ function renderHistory() {
 
 beforeEach(() => {
   getHistory.mockReset()
+  correctSnapshot.mockReset()
   getHistory.mockResolvedValue(ok(historyResponse()))
 })
 
@@ -127,8 +139,13 @@ describe('History', () => {
     await screen.findByRole('table', { name: /monthly headroom over time/i })
 
     expect(screen.getByText(/£100\.00 more/i)).toBeInTheDocument()
-    expect(screen.getByText(/wages/i)).toBeInTheDocument()
-    expect(screen.getByText(/rent/i)).toBeInTheDocument()
+
+    const helped = screen.getByRole('heading', { name: /what helped/i }).parentElement as HTMLElement
+    expect(within(helped).getByText(/^Wages:/)).toBeInTheDocument()
+
+    const reduced = screen.getByRole('heading', { name: /what reduced it/i })
+      .parentElement as HTMLElement
+    expect(within(reduced).getByText(/^Rent:/)).toBeInTheDocument()
   })
 
   it('never asserts a cause for a change', async () => {
@@ -229,5 +246,106 @@ describe('History', () => {
     renderHistory()
 
     expect(await screen.findByText(/can.t reach/i)).toBeInTheDocument()
+  })
+})
+
+describe('History corrections', () => {
+  function correctedHistory() {
+    const original = {
+      ...snapshot('2026-08-01', '931.25', '2450.00', '1518.75'),
+      snapshot_id: 'snap-original',
+      is_effective: false,
+    }
+    const correction = {
+      ...snapshot('2026-08-01', '781.25', '2450.00', '1668.75'),
+      snapshot_id: 'snap-correction',
+      supersedes_snapshot_id: 'snap-original',
+      correction_reason: 'I entered the wrong rent amount.',
+      is_effective: true,
+    }
+    return historyResponse({
+      total: 2,
+      snapshots: [correction, original],
+      series: [{ ...seriesPoint('2026-08-01', '781.25'), snapshot_id: 'snap-correction' }],
+      latest_change: null,
+    })
+  }
+
+  it('offers a correction on the record currently in effect', async () => {
+    renderHistory()
+
+    expect(
+      await screen.findByRole('button', { name: /correct the august 2026 record/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('requires a reason before a correction can be sent', async () => {
+    renderHistory()
+    await userEvent.click(
+      await screen.findByRole('button', { name: /correct the august 2026 record/i }),
+    )
+
+    const save = screen.getByRole('button', { name: /save this correction/i })
+    expect(save).toBeDisabled()
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: /what was wrong/i }),
+      'I entered the wrong rent amount.',
+    )
+
+    expect(save).toBeEnabled()
+  })
+
+  it('warns that a correction adds a record rather than replacing one', async () => {
+    renderHistory()
+    await userEvent.click(
+      await screen.findByRole('button', { name: /correct the august 2026 record/i }),
+    )
+
+    expect(screen.getByText(/adds a new record/i)).toBeInTheDocument()
+    expect(screen.getByText(/the original stays/i)).toBeInTheDocument()
+  })
+
+  it('shows the lineage once a period has been corrected', async () => {
+    getHistory.mockResolvedValue(ok(correctedHistory()))
+
+    renderHistory()
+
+    const records = await screen.findByRole('table', { name: /every confirmed record/i })
+    expect(within(records).getByText(/i entered the wrong rent amount/i)).toBeInTheDocument()
+    expect(within(records).getByText(/superseded/i)).toBeInTheDocument()
+  })
+
+  it('keeps the original record readable at its own values', async () => {
+    getHistory.mockResolvedValue(ok(correctedHistory()))
+
+    renderHistory()
+
+    const records = await screen.findByRole('table', { name: /every confirmed record/i })
+    expect(within(records).getByText('£931.25')).toBeInTheDocument()
+    expect(within(records).getByText('£781.25')).toBeInTheDocument()
+  })
+
+  it('explains a conflict when the record was already corrected elsewhere', async () => {
+    correctSnapshot.mockResolvedValue({
+      data: undefined,
+      error: {
+        detail: {
+          code: 'snapshot_already_superseded',
+          message: 'This record has already been corrected. Refresh your history.',
+        },
+      },
+      request: new Request('http://localhost/history/x/correct'),
+      response: new Response(null, { status: 409 }),
+    } as never)
+
+    renderHistory()
+    await userEvent.click(
+      await screen.findByRole('button', { name: /correct the august 2026 record/i }),
+    )
+    await userEvent.type(screen.getByRole('textbox', { name: /what was wrong/i }), 'Wrong rent.')
+    await userEvent.click(screen.getByRole('button', { name: /save this correction/i }))
+
+    expect(await screen.findByText(/already been corrected/i)).toBeInTheDocument()
   })
 })
