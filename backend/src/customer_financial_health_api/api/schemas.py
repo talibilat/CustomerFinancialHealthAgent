@@ -319,3 +319,35 @@ class CorrectionRequest(StatementSubmission):
 class CorrectedSnapshotResponse(ConfirmedSnapshotResponse):
     supersedes_snapshot_id: str
     correction_reason: str
+
+
+# --- Repayment scenarios ------------------------------------------------------
+
+
+class ScenarioRequest(BaseModel):
+    """A what-if comparison. Nothing here is saved or agreed."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    mode: str
+    proposed_repayment: str
+    # Required only when replacing an existing commitment.
+    replaced_repayment: str | None = None
+    protected_monthly_buffer: str | None = None
+
+
+class ScenarioResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    calculation_policy_version: str
+    basis_snapshot_id: str
+    basis_statement_period: date
+    basis_monthly_headroom: str
+    mode: str
+    proposed_repayment: str
+    replaced_repayment: str | None
+    scenario_headroom: str
+    protected_monthly_buffer: str | None
+    buffer_shortfall: str | None
+    result_code: str
+    warnings: list[str]

@@ -2,6 +2,7 @@ import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-do
 
 import { Overview } from '@/features/overview/Overview'
 import { History } from '@/features/history/History'
+import { RepaymentExplorer } from '@/features/scenario/RepaymentExplorer'
 import { StatementEditor } from '@/features/statement/StatementEditor'
 import { cn } from '@/lib/utils'
 
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/overview', label: 'Overview' },
   { to: '/statement', label: 'Update my information' },
   { to: '/history', label: 'History' },
+  { to: '/repayment', label: 'Explore a repayment' },
 ]
 
 function Navigation() {
@@ -55,6 +57,7 @@ function App() {
               element={<StatementEditor statementPeriod={STATEMENT_PERIOD} />}
             />
             <Route path="/history" element={<History />} />
+            <Route path="/repayment" element={<RepaymentExplorer />} />
           </Routes>
         </main>
       </div>

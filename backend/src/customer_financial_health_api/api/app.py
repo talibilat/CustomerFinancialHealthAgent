@@ -1,7 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from customer_financial_health_api.api.routers import financial_statement, health, history, overview
+from customer_financial_health_api.api.routers import (
+    financial_statement,
+    health,
+    history,
+    overview,
+    repayment_scenario,
+)
 from customer_financial_health_api.settings import get_settings
 
 
@@ -17,6 +23,7 @@ def create_app() -> FastAPI:
     app.include_router(overview.router)
     app.include_router(financial_statement.router)
     app.include_router(history.router)
+    app.include_router(repayment_scenario.router)
     return app
 
 

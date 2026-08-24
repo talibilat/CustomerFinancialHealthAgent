@@ -355,6 +355,47 @@
           }
         }
       }
+    },
+    "/repayment-scenario/preview": {
+      "post": {
+        "tags": [
+          "repayment-scenario"
+        ],
+        "summary": "Preview Repayment Scenario",
+        "operationId": "preview_repayment_scenario_repayment_scenario_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1480,6 +1521,142 @@
         ],
         "title": "ResilienceSectionOut",
         "description": "The resilience values the customer reported, not the calculated result."
+      },
+      "ScenarioRequest": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "proposed_repayment": {
+            "type": "string",
+            "title": "Proposed Repayment"
+          },
+          "replaced_repayment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced Repayment"
+          },
+          "protected_monthly_buffer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Monthly Buffer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "mode",
+          "proposed_repayment"
+        ],
+        "title": "ScenarioRequest",
+        "description": "A what-if comparison. Nothing here is saved or agreed."
+      },
+      "ScenarioResponse": {
+        "properties": {
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "basis_snapshot_id": {
+            "type": "string",
+            "title": "Basis Snapshot Id"
+          },
+          "basis_statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Basis Statement Period"
+          },
+          "basis_monthly_headroom": {
+            "type": "string",
+            "title": "Basis Monthly Headroom"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "proposed_repayment": {
+            "type": "string",
+            "title": "Proposed Repayment"
+          },
+          "replaced_repayment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced Repayment"
+          },
+          "scenario_headroom": {
+            "type": "string",
+            "title": "Scenario Headroom"
+          },
+          "protected_monthly_buffer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Monthly Buffer"
+          },
+          "buffer_shortfall": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buffer Shortfall"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "calculation_policy_version",
+          "basis_snapshot_id",
+          "basis_statement_period",
+          "basis_monthly_headroom",
+          "mode",
+          "proposed_repayment",
+          "replaced_repayment",
+          "scenario_headroom",
+          "protected_monthly_buffer",
+          "buffer_shortfall",
+          "result_code",
+          "warnings"
+        ],
+        "title": "ScenarioResponse"
       },
       "SeriesPointOut": {
         "properties": {

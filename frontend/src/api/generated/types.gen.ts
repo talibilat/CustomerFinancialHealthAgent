@@ -654,6 +654,84 @@ export type ResilienceSectionOut = {
 };
 
 /**
+ * ScenarioRequest
+ *
+ * A what-if comparison. Nothing here is saved or agreed.
+ */
+export type ScenarioRequest = {
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Proposed Repayment
+     */
+    proposed_repayment: string;
+    /**
+     * Replaced Repayment
+     */
+    replaced_repayment?: string | null;
+    /**
+     * Protected Monthly Buffer
+     */
+    protected_monthly_buffer?: string | null;
+};
+
+/**
+ * ScenarioResponse
+ */
+export type ScenarioResponse = {
+    /**
+     * Calculation Policy Version
+     */
+    calculation_policy_version: string;
+    /**
+     * Basis Snapshot Id
+     */
+    basis_snapshot_id: string;
+    /**
+     * Basis Statement Period
+     */
+    basis_statement_period: string;
+    /**
+     * Basis Monthly Headroom
+     */
+    basis_monthly_headroom: string;
+    /**
+     * Mode
+     */
+    mode: string;
+    /**
+     * Proposed Repayment
+     */
+    proposed_repayment: string;
+    /**
+     * Replaced Repayment
+     */
+    replaced_repayment: string | null;
+    /**
+     * Scenario Headroom
+     */
+    scenario_headroom: string;
+    /**
+     * Protected Monthly Buffer
+     */
+    protected_monthly_buffer: string | null;
+    /**
+     * Buffer Shortfall
+     */
+    buffer_shortfall: string | null;
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+};
+
+/**
  * SeriesPointOut
  */
 export type SeriesPointOut = {
@@ -1152,3 +1230,28 @@ export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses = {
 };
 
 export type CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponse = CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses[keyof CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses];
+
+export type PreviewRepaymentScenarioRepaymentScenarioPreviewPostData = {
+    body: ScenarioRequest;
+    path?: never;
+    query?: never;
+    url: '/repayment-scenario/preview';
+};
+
+export type PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type PreviewRepaymentScenarioRepaymentScenarioPreviewPostError = PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors[keyof PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors];
+
+export type PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: ScenarioResponse;
+};
+
+export type PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponse = PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses[keyof PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses];

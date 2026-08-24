@@ -146,7 +146,7 @@ class StatementPreview:
     warnings: tuple[str, ...]
 
 
-def _parse_money(
+def parse_money(
     raw: Any,
     field: str,
     errors: list[FieldError],
@@ -234,7 +234,7 @@ def _parse_entries(raw: Any, prefix: str, errors: list[FieldError]) -> tuple[Sta
             continue
 
         description = _parse_text(item.get("description"), f"{field_prefix}.description", errors)
-        amount = _parse_money(item.get("amount"), f"{field_prefix}.amount", errors)
+        amount = parse_money(item.get("amount"), f"{field_prefix}.amount", errors)
         frequency = _parse_frequency(item.get("frequency"), f"{field_prefix}.frequency", errors)
 
         if description is None or amount is None or frequency is None:
@@ -277,7 +277,7 @@ def _parse_expected_changes(raw: Any, prefix: str, errors: list[FieldError]) -> 
             )
             kind = None
 
-        amount = _parse_money(item.get("amount"), f"{field_prefix}.amount", errors)
+        amount = parse_money(item.get("amount"), f"{field_prefix}.amount", errors)
         frequency = _parse_frequency(item.get("frequency"), f"{field_prefix}.frequency", errors)
 
         if description is None or kind is None or amount is None or frequency is None:
@@ -323,7 +323,7 @@ def _parse_resilience(raw: Any, errors: list[FieldError]) -> ResilienceInput:
     def optional(key: str, *, allow_negative: bool = False) -> Decimal | None:
         if raw.get(key) is None:
             return None
-        return _parse_money(raw.get(key), f"resilience.{key}", errors, allow_negative=allow_negative)
+        return parse_money(raw.get(key), f"resilience.{key}", errors, allow_negative=allow_negative)
 
     return ResilienceInput(
         accessible_savings=optional("accessible_savings"),
