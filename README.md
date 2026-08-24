@@ -140,7 +140,7 @@ GitHub Actions runs that generated-contract check and the isolated Playwright su
 14. **Done.** Choose any of the nine fictional presets on the overview, review the reset warning, and confirm before the active demo view changes.
 15. **Done.** Load zero income, reported shortfall, or protected outgoings not covered to see exact deterministic results and support routes that do not depend on Azure.
 16. **Done.** Load Azure unavailable, then open **Update my information** to complete the unknown outgoing through manual classification with no AI suggestion or authority.
-17. Planned: request an optional personalized explanation.
+17. **Done.** Choose **Explain this more simply** on the overview. The deterministic explanation stays visible and usable throughout, wording that fails validation is replaced by deterministic copy, and accepted wording is rendered as plain text rather than markup.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 
