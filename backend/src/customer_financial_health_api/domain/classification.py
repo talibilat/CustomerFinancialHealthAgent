@@ -173,6 +173,9 @@ class ClassificationOutcome:
     source: ClassificationSource | None
     reason_code: str | None
     taxonomy_version: str = TAXONOMY_VERSION
+    #: An unconfirmed proposal, when one survived validation. Never a decision:
+    #: an outcome carrying only a suggestion is still unresolved.
+    suggestion: object | None = None
 
     @property
     def is_resolved(self) -> bool:
