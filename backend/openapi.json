@@ -356,6 +356,27 @@
         }
       }
     },
+    "/repayment-scenario/basis": {
+      "get": {
+        "tags": [
+          "repayment-scenario"
+        ],
+        "summary": "Retrieve Scenario Basis",
+        "operationId": "retrieve_scenario_basis_repayment_scenario_basis_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioBasisResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/repayment-scenario/preview": {
       "post": {
         "tags": [
@@ -380,6 +401,122 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repayment-scenarios": {
+      "post": {
+        "tags": [
+          "repayment-scenarios"
+        ],
+        "summary": "Save Scenario",
+        "operationId": "save_scenario_repayment_scenarios_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavedScenarioRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedScenarioResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "repayment-scenarios"
+        ],
+        "summary": "List Saved Scenarios",
+        "operationId": "list_saved_scenarios_repayment_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedScenarioListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/repayment-scenarios/{scenario_id}": {
+      "get": {
+        "tags": [
+          "repayment-scenarios"
+        ],
+        "summary": "Retrieve Saved Scenario",
+        "operationId": "retrieve_saved_scenario_repayment_scenarios__scenario_id__get",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedScenarioResponse"
                 }
               }
             }
@@ -944,6 +1081,31 @@
           "statement"
         ],
         "title": "EditableStatementResponse"
+      },
+      "ExistingRepaymentCommitmentOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "normalized_monthly_amount": {
+            "type": "string",
+            "title": "Normalized Monthly Amount"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "description",
+          "normalized_monthly_amount"
+        ],
+        "title": "ExistingRepaymentCommitmentOut"
       },
       "ExpectedChangeIn": {
         "properties": {
@@ -1565,6 +1727,248 @@
         ],
         "title": "ResilienceSectionOut",
         "description": "The resilience values the customer reported, not the calculated result."
+      },
+      "SavedScenarioListResponse": {
+        "properties": {
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/SavedScenarioResponse"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "scenarios",
+          "total"
+        ],
+        "title": "SavedScenarioListResponse"
+      },
+      "SavedScenarioRequest": {
+        "properties": {
+          "basis_snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Basis Snapshot Id"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "selected_existing_commitment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Existing Commitment Id"
+          },
+          "proposed_repayment": {
+            "type": "string",
+            "title": "Proposed Repayment"
+          },
+          "protected_monthly_buffer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Monthly Buffer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "basis_snapshot_id",
+          "mode",
+          "proposed_repayment"
+        ],
+        "title": "SavedScenarioRequest",
+        "description": "The customer-controlled inputs needed to reproduce and save a comparison."
+      },
+      "SavedScenarioResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "basis_snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Basis Snapshot Id"
+          },
+          "basis_statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Basis Statement Period"
+          },
+          "basis_is_superseded": {
+            "type": "boolean",
+            "title": "Basis Is Superseded"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "selected_existing_commitment_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Existing Commitment Id"
+          },
+          "selected_existing_commitment_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Existing Commitment Description"
+          },
+          "proposed_repayment": {
+            "type": "string",
+            "title": "Proposed Repayment"
+          },
+          "protected_monthly_buffer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Protected Monthly Buffer"
+          },
+          "basis_monthly_headroom": {
+            "type": "string",
+            "title": "Basis Monthly Headroom"
+          },
+          "replaced_repayment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replaced Repayment"
+          },
+          "scenario_headroom": {
+            "type": "string",
+            "title": "Scenario Headroom"
+          },
+          "buffer_shortfall": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Buffer Shortfall"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "basis_snapshot_id",
+          "basis_statement_period",
+          "basis_is_superseded",
+          "mode",
+          "selected_existing_commitment_id",
+          "selected_existing_commitment_description",
+          "proposed_repayment",
+          "protected_monthly_buffer",
+          "basis_monthly_headroom",
+          "replaced_repayment",
+          "scenario_headroom",
+          "buffer_shortfall",
+          "result_code",
+          "warnings",
+          "calculation_policy_version",
+          "created_at"
+        ],
+        "title": "SavedScenarioResponse"
+      },
+      "ScenarioBasisResponse": {
+        "properties": {
+          "basis_snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Basis Snapshot Id"
+          },
+          "basis_statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Basis Statement Period"
+          },
+          "basis_monthly_headroom": {
+            "type": "string",
+            "title": "Basis Monthly Headroom"
+          },
+          "existing_repayment_commitments": {
+            "items": {
+              "$ref": "#/components/schemas/ExistingRepaymentCommitmentOut"
+            },
+            "type": "array",
+            "title": "Existing Repayment Commitments"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "basis_snapshot_id",
+          "basis_statement_period",
+          "basis_monthly_headroom",
+          "existing_repayment_commitments"
+        ],
+        "title": "ScenarioBasisResponse"
       },
       "ScenarioRequest": {
         "properties": {

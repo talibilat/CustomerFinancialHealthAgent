@@ -37,6 +37,11 @@ from customer_financial_health_api.domain.statement import (
     ResilienceInput,
     StatementEntry,
 )
+from customer_financial_health_api.domain.repayment import (
+    ScenarioMode,
+    ScenarioResultCode,
+    calculate_scenario,
+)
 from customer_financial_health_api.persistence.models import (
     ConfirmedSnapshot,
     Customer,
@@ -47,6 +52,7 @@ from customer_financial_health_api.persistence.models import (
     ConfirmationIdempotencyKey,
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
+    RepaymentScenario,
 )
 
 # Which statement section each stored entry row belongs to.
@@ -59,6 +65,7 @@ PROTECTED_FUTURE_PROVISION = "protected_future_provision"
 
 @dataclass(frozen=True)
 class SnapshotEntryView:
+    id: uuid.UUID | None
     original_amount: Decimal
     original_frequency: Frequency
     normalized_monthly_amount: Decimal
@@ -67,6 +74,8 @@ class SnapshotEntryView:
     outgoing_treatment: OutgoingTreatment | None = None
     classification_source: ClassificationSource | None = None
     taxonomy_version: str | None = None
+    entry_key: str | None = None
+    section: str | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +135,7 @@ def _entry_rows(
     position_amounts: Sequence[Decimal],
     row_type,
     classifications: dict[str, ClassificationOutcome] | None = None,
+    entry_sections: dict[str, str] | None = None,
 ):
     resolved = classifications or {}
     rows = []
@@ -138,6 +148,10 @@ def _entry_rows(
         )
         # StatementEntry carries the customer's own label; MoneyEntry does not.
         row.description = getattr(entry, "description", None)
+        entry_key = getattr(entry, "entry_id", None)
+        if hasattr(row, "entry_key"):
+            row.entry_key = entry_key
+            row.section = (entry_sections or {}).get(entry_key, OUTGOING)
 
         classification = resolved.get(getattr(entry, "entry_id", None))
         if classification is not None and classification.is_resolved and hasattr(row, "display_category"):
@@ -161,6 +175,7 @@ def save_confirmed_snapshot(
     resilience: ResilienceResult,
     classifications: dict[str, ClassificationOutcome] | None = None,
     supersedes_snapshot_id: uuid.UUID | None = None,
+    repayment_commitment_entry_ids: set[str] | None = None,
 ) -> ConfirmedSnapshot:
     income_normalized = [normalize_to_monthly(e.amount, e.frequency) for e in income_entries]
     outgoing_normalized = [normalize_to_monthly(e.amount, e.frequency) for e in outgoing_entries]
@@ -178,7 +193,18 @@ def save_confirmed_snapshot(
         supersedes_snapshot_id=supersedes_snapshot_id,
         income_entries=_entry_rows(income_entries, income_normalized, SnapshotIncomeEntry),
         outgoing_entries=_entry_rows(
-            outgoing_entries, outgoing_normalized, SnapshotOutgoingEntry, classifications
+            outgoing_entries,
+            outgoing_normalized,
+            SnapshotOutgoingEntry,
+            classifications,
+            {
+                getattr(entry, "entry_id", ""): (
+                    REPAYMENT_COMMITMENT
+                    if getattr(entry, "entry_id", "") in (repayment_commitment_entry_ids or set())
+                    else OUTGOING
+                )
+                for entry in outgoing_entries
+            },
         ),
         current_account_balance=resilience.current_account_balance,
         accessible_savings=resilience.accessible_savings,
@@ -208,6 +234,7 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
         warnings=tuple(snapshot.warnings),
         income_entries=tuple(
             SnapshotEntryView(
+                id=e.id,
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
@@ -217,6 +244,7 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
         ),
         outgoing_entries=tuple(
             SnapshotEntryView(
+                id=e.id,
                 original_amount=e.original_amount,
                 original_frequency=Frequency(e.original_frequency),
                 normalized_monthly_amount=e.normalized_monthly_amount,
@@ -233,6 +261,8 @@ def _to_view(snapshot: ConfirmedSnapshot) -> ConfirmedSnapshotView:
                     else None
                 ),
                 taxonomy_version=e.taxonomy_version,
+                entry_key=e.entry_key,
+                section=e.section,
             )
             for e in snapshot.outgoing_entries
         ),
@@ -645,6 +675,9 @@ def confirm_statement(
         outgoing_entries=outgoings,
         resilience=resilience,
         classifications=classifications,
+        repayment_commitment_entry_ids={
+            entry.entry_id for entry in statement.repayment_commitments
+        },
     )
 
     # Advancing the version retires the draft this snapshot was built from, so a
@@ -870,6 +903,9 @@ def correct_snapshot(
         resilience=resilience,
         classifications=classifications,
         supersedes_snapshot_id=original.id,
+        repayment_commitment_entry_ids={
+            entry.entry_id for entry in statement.repayment_commitments
+        },
     )
     correction.correction_reason = reason
 
@@ -882,3 +918,241 @@ def correct_snapshot(
     )
 
     return _to_view(correction)
+
+
+class ScenarioNotFound(Exception):
+    """A scenario-owned resource is absent or belongs to another customer."""
+
+
+class ScenarioBasisNotCurrent(Exception):
+    """A new save tried to use a basis that has already been superseded."""
+
+
+@dataclass(frozen=True)
+class RepaymentScenarioView:
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    basis_snapshot_id: uuid.UUID
+    basis_statement_period: date
+    basis_is_superseded: bool
+    mode: ScenarioMode
+    selected_existing_commitment_id: uuid.UUID | None
+    selected_existing_commitment_description: str | None
+    proposed_repayment: Decimal
+    protected_monthly_buffer: Decimal | None
+    basis_monthly_headroom: Decimal
+    replaced_repayment: Decimal | None
+    scenario_headroom: Decimal
+    buffer_shortfall: Decimal | None
+    result_code: ScenarioResultCode
+    warnings: tuple[str, ...]
+    calculation_policy_version: str
+    created_at: datetime
+
+
+def _scenario_fingerprint(
+    *,
+    basis_snapshot_id: uuid.UUID,
+    mode: ScenarioMode,
+    selected_existing_commitment_id: uuid.UUID | None,
+    proposed_repayment: Decimal,
+    protected_monthly_buffer: Decimal | None,
+) -> str:
+    payload = {
+        "basis_snapshot_id": str(basis_snapshot_id),
+        "mode": mode.value,
+        "selected_existing_commitment_id": (
+            str(selected_existing_commitment_id)
+            if selected_existing_commitment_id is not None
+            else None
+        ),
+        "proposed_repayment": str(proposed_repayment),
+        "protected_monthly_buffer": (
+            str(protected_monthly_buffer) if protected_monthly_buffer is not None else None
+        ),
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
+def _scenario_to_view(session: Session, row: RepaymentScenario) -> RepaymentScenarioView:
+    basis = session.execute(
+        select(ConfirmedSnapshot).where(
+            ConfirmedSnapshot.id == row.basis_snapshot_id,
+            ConfirmedSnapshot.customer_id == row.customer_id,
+        )
+    ).scalar_one()
+    basis_is_superseded = (
+        session.execute(
+            select(ConfirmedSnapshot.id).where(
+                ConfirmedSnapshot.customer_id == row.customer_id,
+                ConfirmedSnapshot.supersedes_snapshot_id == row.basis_snapshot_id,
+            )
+        ).first()
+        is not None
+    )
+    commitment = (
+        session.get(SnapshotOutgoingEntry, row.selected_existing_commitment_id)
+        if row.selected_existing_commitment_id is not None
+        else None
+    )
+    return RepaymentScenarioView(
+        id=row.id,
+        customer_id=row.customer_id,
+        basis_snapshot_id=row.basis_snapshot_id,
+        basis_statement_period=basis.statement_period,
+        basis_is_superseded=basis_is_superseded,
+        mode=ScenarioMode(row.mode),
+        selected_existing_commitment_id=row.selected_existing_commitment_id,
+        selected_existing_commitment_description=(commitment.description if commitment else None),
+        proposed_repayment=row.proposed_repayment,
+        protected_monthly_buffer=row.protected_monthly_buffer,
+        basis_monthly_headroom=row.basis_monthly_headroom,
+        replaced_repayment=row.replaced_repayment,
+        scenario_headroom=row.scenario_headroom,
+        buffer_shortfall=row.buffer_shortfall,
+        result_code=ScenarioResultCode(row.result_code),
+        warnings=tuple(row.warnings),
+        calculation_policy_version=row.calculation_policy_version,
+        created_at=row.created_at,
+    )
+
+
+def save_repayment_scenario(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    basis_snapshot_id: uuid.UUID,
+    mode: ScenarioMode,
+    selected_existing_commitment_id: uuid.UUID | None,
+    proposed_repayment: Decimal,
+    protected_monthly_buffer: Decimal | None,
+    idempotency_key: str,
+    created_at: datetime,
+) -> RepaymentScenarioView:
+    """Persist one explicit comparison without changing its immutable basis."""
+    fingerprint = _scenario_fingerprint(
+        basis_snapshot_id=basis_snapshot_id,
+        mode=mode,
+        selected_existing_commitment_id=selected_existing_commitment_id,
+        proposed_repayment=proposed_repayment,
+        protected_monthly_buffer=protected_monthly_buffer,
+    )
+    existing = session.execute(
+        select(RepaymentScenario).where(
+            RepaymentScenario.customer_id == customer_id,
+            RepaymentScenario.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.request_fingerprint != fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different repayment scenario"
+            )
+        return _scenario_to_view(session, existing)
+
+    basis = session.execute(
+        select(ConfirmedSnapshot)
+        .where(
+            ConfirmedSnapshot.id == basis_snapshot_id,
+            ConfirmedSnapshot.customer_id == customer_id,
+        )
+        .with_for_update()
+    ).scalar_one_or_none()
+    if basis is None:
+        raise ScenarioNotFound("no such basis snapshot")
+
+    # Another request using this key may have committed while this request was
+    # waiting for the basis lock. Recheck inside the serialized section so a
+    # concurrent retry returns that row instead of reaching the unique
+    # constraint as an internal database error.
+    concurrent_retry = session.execute(
+        select(RepaymentScenario).where(
+            RepaymentScenario.customer_id == customer_id,
+            RepaymentScenario.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if concurrent_retry is not None:
+        if concurrent_retry.request_fingerprint != fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different repayment scenario"
+            )
+        return _scenario_to_view(session, concurrent_retry)
+
+    successor = session.execute(
+        select(ConfirmedSnapshot.id).where(
+            ConfirmedSnapshot.customer_id == customer_id,
+            ConfirmedSnapshot.supersedes_snapshot_id == basis_snapshot_id,
+        )
+    ).first()
+    if successor is not None:
+        raise ScenarioBasisNotCurrent("the basis snapshot has been superseded")
+
+    commitment = None
+    if mode is ScenarioMode.CHANGE_EXISTING:
+        commitment = session.execute(
+            select(SnapshotOutgoingEntry).where(
+                SnapshotOutgoingEntry.id == selected_existing_commitment_id,
+                SnapshotOutgoingEntry.snapshot_id == basis_snapshot_id,
+                SnapshotOutgoingEntry.section == REPAYMENT_COMMITMENT,
+            )
+        ).scalar_one_or_none()
+        if commitment is None:
+            raise ScenarioNotFound("no such existing repayment commitment")
+    elif selected_existing_commitment_id is not None:
+        raise ScenarioNotFound("additional scenarios do not select an existing commitment")
+
+    result = calculate_scenario(
+        monthly_headroom=basis.monthly_headroom,
+        mode=mode,
+        proposed_repayment=proposed_repayment,
+        replaced_repayment=(commitment.normalized_monthly_amount if commitment else None),
+        protected_monthly_buffer=protected_monthly_buffer,
+    )
+    row = RepaymentScenario(
+        customer_id=customer_id,
+        basis_snapshot_id=basis_snapshot_id,
+        mode=mode.value,
+        selected_existing_commitment_id=(commitment.id if commitment else None),
+        proposed_repayment=result.proposed_repayment,
+        protected_monthly_buffer=result.protected_monthly_buffer,
+        basis_monthly_headroom=result.basis_monthly_headroom,
+        replaced_repayment=result.replaced_repayment,
+        scenario_headroom=result.scenario_headroom,
+        buffer_shortfall=result.buffer_shortfall,
+        result_code=result.result_code.value,
+        warnings=list(result.warnings),
+        calculation_policy_version=result.calculation_policy_version,
+        idempotency_key=idempotency_key,
+        request_fingerprint=fingerprint,
+        created_at=created_at,
+    )
+    session.add(row)
+    session.flush()
+    return _scenario_to_view(session, row)
+
+
+def list_repayment_scenarios(
+    session: Session, *, customer_id: uuid.UUID
+) -> tuple[RepaymentScenarioView, ...]:
+    rows = session.execute(
+        select(RepaymentScenario)
+        .where(RepaymentScenario.customer_id == customer_id)
+        .order_by(RepaymentScenario.created_at.desc(), RepaymentScenario.id.desc())
+    ).scalars()
+    return tuple(_scenario_to_view(session, row) for row in rows)
+
+
+def get_repayment_scenario(
+    session: Session, *, customer_id: uuid.UUID, scenario_id: uuid.UUID
+) -> RepaymentScenarioView:
+    row = session.execute(
+        select(RepaymentScenario).where(
+            RepaymentScenario.id == scenario_id,
+            RepaymentScenario.customer_id == customer_id,
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        raise ScenarioNotFound("no such repayment scenario")
+    return _scenario_to_view(session, row)
