@@ -294,6 +294,100 @@ export type CorrectionRequest = {
 };
 
 /**
+ * DemoPresetListResponse
+ */
+export type DemoPresetListResponse = {
+    /**
+     * Presets
+     */
+    presets: Array<DemoPresetOut>;
+};
+
+/**
+ * DemoPresetOut
+ */
+export type DemoPresetOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Fictional
+     */
+    fictional?: boolean;
+};
+
+/**
+ * DemoResetRequest
+ */
+export type DemoResetRequest = {
+    /**
+     * Preset
+     */
+    preset: string;
+    /**
+     * Confirmed Reset
+     */
+    confirmed_reset?: boolean;
+};
+
+/**
+ * DemoResetResponse
+ */
+export type DemoResetResponse = {
+    /**
+     * Preset
+     */
+    preset: string;
+    /**
+     * Message
+     */
+    message: string;
+};
+
+/**
+ * DifficultyOut
+ */
+export type DifficultyOut = {
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Explanation
+     */
+    explanation: string;
+    /**
+     * Shortfall
+     */
+    shortfall: string | null;
+    /**
+     * Protected Monthly Outgoings
+     */
+    protected_monthly_outgoings: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Support Routes
+     */
+    support_routes: Array<SupportRouteOut>;
+};
+
+/**
  * EditableStatementOut
  */
 export type EditableStatementOut = {
@@ -572,6 +666,10 @@ export type OverviewResponse = {
      */
     customer_id: string;
     /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
      * Statement Period
      */
     statement_period: string;
@@ -612,6 +710,56 @@ export type OverviewResponse = {
      */
     outgoing_entries: Array<MoneyEntryOut>;
     resilience: ResilienceOut;
+    difficulty: DifficultyOut;
+    /**
+     * Deterministic Explanation
+     */
+    deterministic_explanation: string;
+    personalized_explanation: PersonalizedExplanationOut | null;
+};
+
+/**
+ * PersonalizedExplanationOut
+ */
+export type PersonalizedExplanationOut = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Text
+     */
+    text: string;
+    /**
+     * Outcome
+     */
+    outcome: string;
+    /**
+     * Deployment
+     */
+    deployment: string | null;
+    /**
+     * Prompt Version
+     */
+    prompt_version: string;
+    /**
+     * Schema Version
+     */
+    schema_version: string;
+    /**
+     * Created At
+     */
+    created_at: string;
+};
+
+/**
+ * PersonalizedExplanationRequest
+ */
+export type PersonalizedExplanationRequest = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
 };
 
 /**
@@ -1150,6 +1298,32 @@ export type StatementUpdateRequest = {
 };
 
 /**
+ * SupportRouteOut
+ */
+export type SupportRouteOut = {
+    /**
+     * Code
+     */
+    code: string;
+    /**
+     * Label
+     */
+    label: string;
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Url
+     */
+    url: string;
+    /**
+     * External
+     */
+    external: boolean;
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -1217,6 +1391,47 @@ export type ReadinessHealthReadyGetResponses = {
 
 export type ReadinessHealthReadyGetResponse = ReadinessHealthReadyGetResponses[keyof ReadinessHealthReadyGetResponses];
 
+export type ListDemoPresetsDemoPresetsGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/demo/presets';
+};
+
+export type ListDemoPresetsDemoPresetsGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoPresetListResponse;
+};
+
+export type ListDemoPresetsDemoPresetsGetResponse = ListDemoPresetsDemoPresetsGetResponses[keyof ListDemoPresetsDemoPresetsGetResponses];
+
+export type ResetDemoDemoResetPostData = {
+    body: DemoResetRequest;
+    path?: never;
+    query?: never;
+    url: '/demo/reset';
+};
+
+export type ResetDemoDemoResetPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type ResetDemoDemoResetPostError = ResetDemoDemoResetPostErrors[keyof ResetDemoDemoResetPostErrors];
+
+export type ResetDemoDemoResetPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: DemoResetResponse;
+};
+
+export type ResetDemoDemoResetPostResponse = ResetDemoDemoResetPostResponses[keyof ResetDemoDemoResetPostResponses];
+
 export type GetOverviewOverviewGetData = {
     body?: never;
     path?: never;
@@ -1232,6 +1447,37 @@ export type GetOverviewOverviewGetResponses = {
 };
 
 export type GetOverviewOverviewGetResponse = GetOverviewOverviewGetResponses[keyof GetOverviewOverviewGetResponses];
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostData = {
+    body: PersonalizedExplanationRequest;
+    headers: {
+        /**
+         * Idempotency-Key
+         */
+        'Idempotency-Key': string;
+    };
+    path?: never;
+    query?: never;
+    url: '/overview/personalized-explanation';
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostError = RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors[keyof RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors];
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses = {
+    /**
+     * Successful Response
+     */
+    200: PersonalizedExplanationOut;
+};
+
+export type RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponse = RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses[keyof RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses];
 
 export type RetrieveFinancialStatementFinancialStatementGetData = {
     body?: never;

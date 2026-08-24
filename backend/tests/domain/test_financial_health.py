@@ -79,8 +79,16 @@ def test_monthly_position_with_zero_income_reports_shortfall_and_warning():
     )
 
     assert result.normalized_monthly_income == Decimal("0.00")
-    assert result.result_code == CurrentPositionResultCode.SHORTFALL
+    assert result.result_code == CurrentPositionResultCode.ZERO_INCOME
     assert "zero_income" in result.warnings
+
+
+def test_monthly_position_with_no_income_or_outgoings_is_incomplete():
+    result = calculate_monthly_position([], [])
+
+    assert result.monthly_headroom == Decimal("0.00")
+    assert result.result_code == CurrentPositionResultCode.INCOMPLETE_INFORMATION
+    assert result.warnings == ("incomplete_information",)
 
 
 def test_monthly_position_rejects_negative_income_amount():

@@ -129,7 +129,7 @@ class TestBoundaryAmounts:
 
         assert preview.position.normalized_monthly_income == Decimal("0.00")
         assert preview.position.monthly_headroom == Decimal("-0.01")
-        assert preview.position.result_code.value == "shortfall"
+        assert preview.position.result_code.value == "zero_income"
         assert "zero_income" in preview.position.warnings
 
     def test_largest_supported_amount_is_accepted(self):

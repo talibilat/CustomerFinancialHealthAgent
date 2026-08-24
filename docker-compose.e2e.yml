@@ -1,0 +1,17 @@
+services:
+  migrate:
+    environment:
+      DEMO_MODE: "true"
+      AZURE_OPENAI_ENDPOINT: ""
+      AZURE_OPENAI_CLASSIFICATION_DEPLOYMENT: ""
+      AZURE_OPENAI_GUIDANCE_DEPLOYMENT: ""
+      AZURE_OPENAI_API_KEY: ""
+
+  backend:
+    environment:
+      DEMO_MODE: "true"
+      FRONTEND_ORIGIN: "http://localhost:${FRONTEND_PORT:-15173}"
+      AZURE_OPENAI_ENDPOINT: ""
+      AZURE_OPENAI_CLASSIFICATION_DEPLOYMENT: ""
+      AZURE_OPENAI_GUIDANCE_DEPLOYMENT: ""
+      AZURE_OPENAI_API_KEY: ""

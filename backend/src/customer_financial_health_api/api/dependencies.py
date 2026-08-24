@@ -10,6 +10,7 @@ from customer_financial_health_api.settings import get_settings
 from customer_financial_health_api.providers.azure_openai import (
     AzureClassificationSuggestionProvider,
 )
+from customer_financial_health_api.providers.azure_guidance import AzureGuidanceGenerator
 from customer_financial_health_api.providers.openai_client import (
     SharedOpenAIClient,
     build_shared_openai_client,
@@ -50,4 +51,15 @@ def get_classification_provider(
     return AzureClassificationSuggestionProvider(
         client=configured.client,
         deployment=configured.classification_deployment,
+    )
+
+
+def get_guidance_generator(
+    configured: SharedOpenAIClient | None = Depends(get_shared_openai_client),
+):
+    if configured is None or configured.guidance_deployment is None:
+        return None
+    return AzureGuidanceGenerator(
+        client=configured.client,
+        deployment=configured.guidance_deployment,
     )

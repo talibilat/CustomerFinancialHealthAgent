@@ -2,6 +2,20 @@ import { expect, test } from '@playwright/test'
 
 const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL ?? 'http://localhost:8000'
 
+test.beforeEach(async ({ request }) => {
+  // Force a transition before loading the stable statement fixture because
+  // selecting the already-active preset is intentionally idempotent.
+  const transition = await request.post(`${apiBaseUrl}/demo/reset`, {
+    data: { preset: 'zero_income', confirmed_reset: true },
+  })
+  expect(transition.ok()).toBeTruthy()
+
+  const reset = await request.post(`${apiBaseUrl}/demo/reset`, {
+    data: { preset: 'repayment_near_buffer', confirmed_reset: true },
+  })
+  expect(reset.ok()).toBeTruthy()
+})
+
 test('edits and previews a statement without changing confirmed history', async ({ page, request }) => {
   const confirmedBefore = await request.get(`${apiBaseUrl}/overview`)
   expect(confirmedBefore.ok()).toBeTruthy()
@@ -46,6 +60,58 @@ test('keeps the statement editor usable at a 375px viewport', async ({ page }) =
     document: document.documentElement.scrollWidth,
   }))
   expect(afterAdd.document).toBeLessThanOrEqual(afterAdd.viewport)
+})
+
+test('invalid statement keeps every entered value and links every error to its control', async ({ page }) => {
+  await page.goto('/statement')
+  const wagesAmount = page.getByRole('textbox', { name: 'Wages amount' })
+  const rentAmount = page.getByRole('textbox', { name: 'Rent amount' })
+  await expect(wagesAmount).toBeVisible()
+
+  await wagesAmount.fill('-5.00')
+  await rentAmount.fill('NaN')
+  await page.getByRole('button', { name: 'Save my statement' }).click()
+
+  const summary = page.getByRole('alert', { name: 'There is a problem' })
+  await expect(summary).toBeFocused()
+  const negativeAmountLink = summary.getByRole('link', {
+    name: 'Enter an amount of zero or more.',
+  })
+  const nonFiniteAmountLink = summary.getByRole('link', { name: 'Enter a real amount.' })
+  await expect(negativeAmountLink).toBeVisible()
+  await expect(nonFiniteAmountLink).toBeVisible()
+
+  const wagesTarget = await negativeAmountLink.getAttribute('href')
+  const rentTarget = await nonFiniteAmountLink.getAttribute('href')
+  expect(wagesTarget).toBeTruthy()
+  expect(rentTarget).toBeTruthy()
+  await expect(wagesAmount).toHaveAttribute('id', wagesTarget!.slice(1))
+  await expect(rentAmount).toHaveAttribute('id', rentTarget!.slice(1))
+  await expect(wagesAmount).toHaveValue('-5.00')
+  await expect(rentAmount).toHaveValue('NaN')
+})
+
+test('stale statement refreshes from the current saved values', async ({ page, context }) => {
+  const otherPage = await context.newPage()
+  await page.goto('/statement')
+  await otherPage.goto('/statement')
+
+  const staleRentAmount = page.getByRole('textbox', { name: 'Rent amount' })
+  const currentRentAmount = otherPage.getByRole('textbox', { name: 'Rent amount' })
+  await expect(staleRentAmount).toBeVisible()
+  await expect(currentRentAmount).toBeVisible()
+
+  await currentRentAmount.fill('1111.00')
+  await otherPage.getByRole('button', { name: 'Save my statement' }).click()
+  await expect(otherPage.getByRole('status')).toContainText('Your statement was saved')
+
+  await staleRentAmount.fill('999.00')
+  await page.getByRole('button', { name: 'Save my statement' }).click()
+  await expect(page.getByText(/refresh to see the current version/i)).toBeVisible()
+  await expect(staleRentAmount).toHaveValue('999.00')
+
+  await page.getByRole('button', { name: 'Refresh this statement' }).click()
+  await expect(staleRentAmount).toHaveValue('1111.00')
 })
 
 test('manual classification path stays completable and visible in history', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, ListSavedScenariosRepaymentScenariosGetData, ListSavedScenariosRepaymentScenariosGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetData, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetErrors, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetResponses, RetrieveScenarioBasisRepaymentScenarioBasisGetData, RetrieveScenarioBasisRepaymentScenarioBasisGetResponses, SaveScenarioRepaymentScenariosPostData, SaveScenarioRepaymentScenariosPostErrors, SaveScenarioRepaymentScenariosPostResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
+import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, ListDemoPresetsDemoPresetsGetData, ListDemoPresetsDemoPresetsGetResponses, ListSavedScenariosRepaymentScenariosGetData, ListSavedScenariosRepaymentScenariosGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RequestPersonalizedExplanationOverviewPersonalizedExplanationPostData, RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors, RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses, ResetDemoDemoResetPostData, ResetDemoDemoResetPostErrors, ResetDemoDemoResetPostResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetData, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetErrors, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetResponses, RetrieveScenarioBasisRepaymentScenarioBasisGetData, RetrieveScenarioBasisRepaymentScenarioBasisGetResponses, SaveScenarioRepaymentScenariosPostData, SaveScenarioRepaymentScenariosPostErrors, SaveScenarioRepaymentScenariosPostResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -29,9 +29,38 @@ export const livenessHealthLiveGet = <ThrowOnError extends boolean = false>(opti
 export const readinessHealthReadyGet = <ThrowOnError extends boolean = false>(options?: Options<ReadinessHealthReadyGetData, ThrowOnError>) => (options?.client ?? client).get<ReadinessHealthReadyGetResponses, unknown, ThrowOnError>({ url: '/health/ready', ...options });
 
 /**
+ * List Demo Presets
+ */
+export const listDemoPresetsDemoPresetsGet = <ThrowOnError extends boolean = false>(options?: Options<ListDemoPresetsDemoPresetsGetData, ThrowOnError>) => (options?.client ?? client).get<ListDemoPresetsDemoPresetsGetResponses, unknown, ThrowOnError>({ url: '/demo/presets', ...options });
+
+/**
+ * Reset Demo
+ */
+export const resetDemoDemoResetPost = <ThrowOnError extends boolean = false>(options: Options<ResetDemoDemoResetPostData, ThrowOnError>) => (options.client ?? client).post<ResetDemoDemoResetPostResponses, ResetDemoDemoResetPostErrors, ThrowOnError>({
+    url: '/demo/reset',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
  * Get Overview
  */
 export const getOverviewOverviewGet = <ThrowOnError extends boolean = false>(options?: Options<GetOverviewOverviewGetData, ThrowOnError>) => (options?.client ?? client).get<GetOverviewOverviewGetResponses, unknown, ThrowOnError>({ url: '/overview', ...options });
+
+/**
+ * Request Personalized Explanation
+ */
+export const requestPersonalizedExplanationOverviewPersonalizedExplanationPost = <ThrowOnError extends boolean = false>(options: Options<RequestPersonalizedExplanationOverviewPersonalizedExplanationPostData, ThrowOnError>) => (options.client ?? client).post<RequestPersonalizedExplanationOverviewPersonalizedExplanationPostResponses, RequestPersonalizedExplanationOverviewPersonalizedExplanationPostErrors, ThrowOnError>({
+    url: '/overview/personalized-explanation',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Retrieve Financial Statement

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from customer_financial_health_api.api.routers import (
     financial_statement,
+    demo,
     health,
     history,
     overview,
@@ -20,6 +21,7 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     app.include_router(health.router)
+    app.include_router(demo.router)
     app.include_router(overview.router)
     app.include_router(financial_statement.router)
     app.include_router(history.router)

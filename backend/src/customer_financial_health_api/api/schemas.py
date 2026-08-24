@@ -25,10 +25,51 @@ class ResilienceOut(BaseModel):
     warnings: list[str]
 
 
+class SupportRouteOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    description: str
+    url: str
+    external: bool
+
+
+class DifficultyOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result_code: str
+    title: str
+    explanation: str
+    shortfall: str | None
+    protected_monthly_outgoings: str
+    warnings: list[str]
+    support_routes: list[SupportRouteOut]
+
+
+class PersonalizedExplanationOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
+    text: str
+    outcome: str
+    deployment: str | None
+    prompt_version: str
+    schema_version: str
+    created_at: datetime
+
+
+class PersonalizedExplanationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
+
+
 class OverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_id: str
+    snapshot_id: UUID
     statement_period: date
     confirmed_at: datetime
     calculation_policy_version: str
@@ -40,6 +81,38 @@ class OverviewResponse(BaseModel):
     income_entries: list[MoneyEntryOut]
     outgoing_entries: list[MoneyEntryOut]
     resilience: ResilienceOut
+    difficulty: DifficultyOut
+    deterministic_explanation: str
+    personalized_explanation: PersonalizedExplanationOut | None
+
+
+class DemoPresetOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    description: str
+    fictional: bool = True
+
+
+class DemoPresetListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    presets: list[DemoPresetOut]
+
+
+class DemoResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str
+    confirmed_reset: bool = False
+
+
+class DemoResetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str
+    message: str
 
 
 # --- Editable financial statement -------------------------------------------

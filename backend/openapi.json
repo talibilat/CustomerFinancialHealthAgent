@@ -45,6 +45,68 @@
         }
       }
     },
+    "/demo/presets": {
+      "get": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "List Demo Presets",
+        "operationId": "list_demo_presets_demo_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoPresetListResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/demo/reset": {
+      "post": {
+        "tags": [
+          "demo"
+        ],
+        "summary": "Reset Demo",
+        "operationId": "reset_demo_demo_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemoResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DemoResetResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/overview": {
       "get": {
         "summary": "Get Overview",
@@ -56,6 +118,55 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/OverviewResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overview/personalized-explanation": {
+      "post": {
+        "summary": "Request Personalized Explanation",
+        "operationId": "request_personalized_explanation_overview_personalized_explanation_post",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersonalizedExplanationRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersonalizedExplanationOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
                 }
               }
             }
@@ -1006,6 +1117,147 @@
         "title": "CorrectionRequest",
         "description": "A corrected statement replacing a confirmed snapshot."
       },
+      "DemoPresetListResponse": {
+        "properties": {
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/DemoPresetOut"
+            },
+            "type": "array",
+            "title": "Presets"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "presets"
+        ],
+        "title": "DemoPresetListResponse"
+      },
+      "DemoPresetOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "fictional": {
+            "type": "boolean",
+            "title": "Fictional",
+            "default": true
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "description"
+        ],
+        "title": "DemoPresetOut"
+      },
+      "DemoResetRequest": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "title": "Preset"
+          },
+          "confirmed_reset": {
+            "type": "boolean",
+            "title": "Confirmed Reset",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "preset"
+        ],
+        "title": "DemoResetRequest"
+      },
+      "DemoResetResponse": {
+        "properties": {
+          "preset": {
+            "type": "string",
+            "title": "Preset"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "preset",
+          "message"
+        ],
+        "title": "DemoResetResponse"
+      },
+      "DifficultyOut": {
+        "properties": {
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "explanation": {
+            "type": "string",
+            "title": "Explanation"
+          },
+          "shortfall": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortfall"
+          },
+          "protected_monthly_outgoings": {
+            "type": "string",
+            "title": "Protected Monthly Outgoings"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "support_routes": {
+            "items": {
+              "$ref": "#/components/schemas/SupportRouteOut"
+            },
+            "type": "array",
+            "title": "Support Routes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "result_code",
+          "title",
+          "explanation",
+          "shortfall",
+          "protected_monthly_outgoings",
+          "warnings",
+          "support_routes"
+        ],
+        "title": "DifficultyOut"
+      },
       "EditableStatementOut": {
         "properties": {
           "statement_period": {
@@ -1445,6 +1697,11 @@
             "type": "string",
             "title": "Customer Id"
           },
+          "snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Snapshot Id"
+          },
           "statement_period": {
             "type": "string",
             "format": "date",
@@ -1498,12 +1755,30 @@
           },
           "resilience": {
             "$ref": "#/components/schemas/ResilienceOut"
+          },
+          "difficulty": {
+            "$ref": "#/components/schemas/DifficultyOut"
+          },
+          "deterministic_explanation": {
+            "type": "string",
+            "title": "Deterministic Explanation"
+          },
+          "personalized_explanation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersonalizedExplanationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
         "type": "object",
         "required": [
           "customer_id",
+          "snapshot_id",
           "statement_period",
           "confirmed_at",
           "calculation_policy_version",
@@ -1514,9 +1789,80 @@
           "warnings",
           "income_entries",
           "outgoing_entries",
-          "resilience"
+          "resilience",
+          "difficulty",
+          "deterministic_explanation",
+          "personalized_explanation"
         ],
         "title": "OverviewResponse"
+      },
+      "PersonalizedExplanationOut": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Snapshot Id"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "outcome": {
+            "type": "string",
+            "title": "Outcome"
+          },
+          "deployment": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deployment"
+          },
+          "prompt_version": {
+            "type": "string",
+            "title": "Prompt Version"
+          },
+          "schema_version": {
+            "type": "string",
+            "title": "Schema Version"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "text",
+          "outcome",
+          "deployment",
+          "prompt_version",
+          "schema_version",
+          "created_at"
+        ],
+        "title": "PersonalizedExplanationOut"
+      },
+      "PersonalizedExplanationRequest": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Snapshot Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "snapshot_id"
+        ],
+        "title": "PersonalizedExplanationRequest"
       },
       "ResilienceIn": {
         "properties": {
@@ -2477,6 +2823,40 @@
         ],
         "title": "StatementUpdateRequest",
         "description": "A submission that replaces the stored statement it was built from."
+      },
+      "SupportRouteOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "external": {
+            "type": "boolean",
+            "title": "External"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code",
+          "label",
+          "description",
+          "url",
+          "external"
+        ],
+        "title": "SupportRouteOut"
       },
       "ValidationError": {
         "properties": {

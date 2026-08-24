@@ -42,9 +42,14 @@ from customer_financial_health_api.domain.repayment import (
     ScenarioResultCode,
     calculate_scenario,
 )
+from customer_financial_health_api.domain.guidance import (
+    GuidanceOutcome,
+    GuidanceRequestOutcome,
+)
 from customer_financial_health_api.persistence.models import (
     ConfirmedSnapshot,
     Customer,
+    DemoState,
     EditableFinancialStatement,
     EditableStatementEntry,
     EditableStatementExpectedChange,
@@ -53,6 +58,7 @@ from customer_financial_health_api.persistence.models import (
     SnapshotIncomeEntry,
     SnapshotOutgoingEntry,
     RepaymentScenario,
+    PersonalizedExplanation,
 )
 
 # Which statement section each stored entry row belongs to.
@@ -97,6 +103,19 @@ class ConfirmedSnapshotView:
     correction_reason: str | None = None
 
 
+@dataclass(frozen=True)
+class PersonalizedExplanationView:
+    id: uuid.UUID
+    customer_id: uuid.UUID
+    snapshot_id: uuid.UUID
+    text: str
+    outcome: GuidanceRequestOutcome
+    deployment: str | None
+    prompt_version: str
+    schema_version: str
+    created_at: datetime
+
+
 class StaleStatementVersion(Exception):
     """Raised when a save is built from a statement version that is no longer current."""
 
@@ -126,8 +145,16 @@ def create_customer(session: Session) -> Customer:
 
 
 def get_demo_customer(session: Session) -> Customer | None:
+    active = session.get(DemoState, 1)
+    if active is not None:
+        return session.get(Customer, active.active_customer_id)
     stmt = select(Customer).order_by(Customer.created_at).limit(1)
     return session.execute(stmt).scalar_one_or_none()
+
+
+def get_active_demo_preset(session: Session) -> str | None:
+    active = session.get(DemoState, 1)
+    return active.active_preset if active is not None else None
 
 
 def _entry_rows(
@@ -301,6 +328,93 @@ def get_effective_snapshot(session: Session, *, customer_id: uuid.UUID) -> Confi
     if snapshot is None:
         return None
     return _to_view(snapshot)
+
+
+class PersonalizedExplanationSnapshotNotFound(Exception):
+    """The requested snapshot is absent or belongs to a different customer."""
+
+
+def _personalized_explanation_view(
+    row: PersonalizedExplanation,
+) -> PersonalizedExplanationView:
+    return PersonalizedExplanationView(
+        id=row.id,
+        customer_id=row.customer_id,
+        snapshot_id=row.snapshot_id,
+        text=row.text,
+        outcome=GuidanceRequestOutcome(row.request_outcome),
+        deployment=row.deployment,
+        prompt_version=row.prompt_version,
+        schema_version=row.schema_version,
+        created_at=row.created_at,
+    )
+
+
+def record_personalized_explanation(
+    session: Session,
+    *,
+    customer_id: uuid.UUID,
+    snapshot_id: uuid.UUID,
+    explanation: GuidanceOutcome,
+    idempotency_key: str,
+    request_fingerprint: str,
+    created_at: datetime,
+) -> PersonalizedExplanationView:
+    existing = session.execute(
+        select(PersonalizedExplanation).where(
+            PersonalizedExplanation.customer_id == customer_id,
+            PersonalizedExplanation.idempotency_key == idempotency_key,
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        if existing.request_fingerprint != request_fingerprint:
+            raise IdempotencyConflict(
+                "this idempotency key was already used for a different guidance request"
+            )
+        return _personalized_explanation_view(existing)
+
+    owned_snapshot = session.execute(
+        select(ConfirmedSnapshot.id).where(
+            ConfirmedSnapshot.id == snapshot_id,
+            ConfirmedSnapshot.customer_id == customer_id,
+        )
+    ).scalar_one_or_none()
+    if owned_snapshot is None:
+        raise PersonalizedExplanationSnapshotNotFound("no such snapshot")
+
+    row = PersonalizedExplanation(
+        customer_id=customer_id,
+        snapshot_id=snapshot_id,
+        text=explanation.text,
+        request_outcome=explanation.outcome.value,
+        deployment=explanation.deployment,
+        prompt_version=explanation.prompt_version,
+        schema_version=explanation.schema_version,
+        idempotency_key=idempotency_key,
+        request_fingerprint=request_fingerprint,
+        created_at=created_at,
+    )
+    session.add(row)
+    session.flush()
+    return _personalized_explanation_view(row)
+
+
+def get_latest_personalized_explanation(
+    session: Session, *, customer_id: uuid.UUID, snapshot_id: uuid.UUID
+) -> PersonalizedExplanationView | None:
+    row = session.execute(
+        select(PersonalizedExplanation)
+        .where(
+            PersonalizedExplanation.customer_id == customer_id,
+            PersonalizedExplanation.snapshot_id == snapshot_id,
+        )
+        .order_by(
+            PersonalizedExplanation.created_at.desc(),
+            PersonalizedExplanation.id.desc(),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+    return _personalized_explanation_view(row) if row is not None else None
 
 
 def _entry_rows_for(
