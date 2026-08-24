@@ -240,3 +240,66 @@ class ConfirmedSnapshotResponse(BaseModel):
     income_entries: list[StatementEntryOut]
     outgoing_entries: list[StatementEntryOut]
     resilience: ResilienceOut
+
+
+# --- Confirmed history --------------------------------------------------------
+
+
+class HistorySnapshotOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: str
+    statement_period: date
+    confirmed_at: datetime
+    # Read from what was stored, never recomputed with today's policy.
+    calculation_policy_version: str
+    normalized_monthly_income: str
+    normalized_monthly_outgoings: str
+    monthly_headroom: str
+    result_code: str
+    warnings: list[str]
+    income_entries: list[StatementEntryOut]
+    outgoing_entries: list[StatementEntryOut]
+
+
+class SeriesPointOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    statement_period: date
+    normalized_monthly_income: str
+    normalized_monthly_outgoings: str
+    monthly_headroom: str
+    result_code: str
+
+
+class ComponentChangeOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str
+    section: str
+    previous_monthly: str
+    current_monthly: str
+    signed_headroom_effect: str
+
+
+class ChangeExplanationOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    is_baseline: bool
+    previous_period: date | None
+    current_period: date
+    monthly_headroom_change: str | None
+    increases: list[ComponentChangeOut]
+    decreases: list[ComponentChangeOut]
+    warnings: list[str]
+
+
+class HistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    total: int
+    limit: int
+    offset: int
+    snapshots: list[HistorySnapshotOut]
+    series: list[SeriesPointOut]
+    latest_change: ChangeExplanationOut | None
