@@ -9,11 +9,14 @@ from customer_financial_health_api.api.routers import (
     overview,
     repayment_scenario,
 )
+from customer_financial_health_api.api.safety import safe_failure_middleware
 from customer_financial_health_api.settings import get_settings
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Customer Financial Health API")
+    # Registered first so it wraps everything, including the routers below.
+    app.middleware("http")(safe_failure_middleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[get_settings().frontend_origin],
