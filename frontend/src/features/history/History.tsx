@@ -1,20 +1,71 @@
-import { Fragment, useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
-import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import {
   correctConfirmedSnapshotHistorySnapshotIdCorrectPost,
   getHistoryHistoryGet,
+  retrieveFinancialStatementFinancialStatementGet,
 } from '@/api/generated'
-import type { ChangeExplanationOut, HistoryResponse } from '@/api/generated'
+import type {
+  ChangeExplanationOut,
+  EditableStatementResponse,
+  HistoryResponse,
+  StatementEntryOut,
+} from '@/api/generated'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
+import { LoadError } from '@/components/LoadError'
 import { formatGbp, formatPeriod } from '@/lib/format'
 
 const PAGE_SIZE = 12
+
+function correctionEntry(entry: StatementEntryOut) {
+  const classification = entry.classification
+  return {
+    entry_id: entry.entry_id,
+    description: entry.description,
+    amount: entry.original_amount,
+    frequency: entry.original_frequency,
+    ...(classification?.display_category && classification.outgoing_treatment
+      ? {
+          classification: {
+            display_category: classification.display_category,
+            outgoing_treatment: classification.outgoing_treatment,
+            remember: false,
+          },
+        }
+      : {}),
+  }
+}
+
+function correctionBody(editable: EditableStatementResponse, correctionReason: string) {
+  const statement = editable.statement
+  return {
+    statement_period: statement.statement_period,
+    currency: statement.currency,
+    income_entries: statement.income_entries.map(correctionEntry),
+    outgoing_entries: statement.outgoing_entries.map(correctionEntry),
+    repayment_commitments: statement.repayment_commitments.map(correctionEntry),
+    resilience: statement.resilience,
+    looking_ahead: {
+      irregular_costs: statement.looking_ahead.irregular_costs.map(correctionEntry),
+      protected_future_provisions:
+        statement.looking_ahead.protected_future_provisions.map(correctionEntry),
+      expected_changes: statement.looking_ahead.expected_changes.map((change) => ({
+        entry_id: change.entry_id,
+        description: change.description,
+        kind: change.kind,
+        amount: change.original_amount,
+        frequency: change.original_frequency,
+      })),
+    },
+    correction_reason: correctionReason,
+  }
+}
 
 function identifierLabel(value: string): string {
   return value.replaceAll('_', ' ')
@@ -29,7 +80,7 @@ function StoredEntries({
 }) {
   return (
     <section>
-      <h4 className="font-medium">{title}</h4>
+      <h3 className="font-medium">{title}</h3>
       {entries.length === 0 ? (
         <p className="mt-1 text-muted-foreground">Nothing reported.</p>
       ) : (
@@ -340,11 +391,12 @@ export function History() {
 
   if (query.isError || !query.data) {
     return (
-      <Alert variant="destructive" className="mx-auto w-full max-w-3xl">
-        <AlertTriangle />
-        <AlertTitle>We can&apos;t reach the server right now</AlertTitle>
-        <AlertDescription>Your history hasn&apos;t been lost - please try again in a moment.</AlertDescription>
-      </Alert>
+      <LoadError
+        subject="history"
+        className="mx-auto w-full max-w-3xl"
+        retrying={query.isFetching}
+        onRetry={() => void query.refetch()}
+      />
     )
   }
 
@@ -411,13 +463,23 @@ function CorrectionPanel({
   const [open, setOpen] = useState(false)
   const [reason, setReason] = useState('')
   const [conflict, setConflict] = useState<string | null>(null)
+  const correctionKey = useRef<{ reason: string; key: string } | null>(null)
 
   const mutation = useMutation({
     mutationFn: async () => {
+      const editable = await retrieveFinancialStatementFinancialStatementGet({
+        query: { statement_period: period },
+      })
+      if (editable.error || !editable.data) {
+        throw new Error('correction_statement_unavailable')
+      }
+      if (correctionKey.current?.reason !== reason) {
+        correctionKey.current = { reason, key: crypto.randomUUID() }
+      }
       const result = await correctConfirmedSnapshotHistorySnapshotIdCorrectPost({
         path: { snapshot_id: snapshotId },
-        body: { correction_reason: reason } as never,
-        headers: { 'Idempotency-Key': `correct-${snapshotId}-${reason.length}` },
+        body: correctionBody(editable.data, reason) as never,
+        headers: { 'Idempotency-Key': correctionKey.current.key },
       })
       if (result.error || !result.data) {
         const detail = (result.error as { detail?: { message?: string } })?.detail
@@ -428,6 +490,7 @@ function CorrectionPanel({
     },
     onMutate: () => setConflict(null),
     onSuccess: () => {
+      correctionKey.current = null
       setOpen(false)
       setReason('')
       onDone()
@@ -454,6 +517,13 @@ function CorrectionPanel({
         <p className="text-sm text-muted-foreground">
           Correcting adds a new record for this period. The original stays in your history so the
           change is always visible.
+        </p>
+        <p className="text-sm text-muted-foreground">
+          This uses the values in your currently saved statement. If an amount is wrong,{' '}
+          <a className="underline" href="/statement">
+            update your information first
+          </a>
+          .
         </p>
       </div>
 

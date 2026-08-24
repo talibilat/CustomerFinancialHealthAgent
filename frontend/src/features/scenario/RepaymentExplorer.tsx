@@ -13,6 +13,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { LoadError } from '@/components/LoadError'
 import { formatGbp, formatPeriod } from '@/lib/format'
 
 type FieldError = { field: string; code: string; message: string }
@@ -315,6 +316,20 @@ export function RepaymentExplorer() {
   const visibleSaved = justSaved && !savedScenarios.some((item) => item.id === justSaved.id)
     ? [justSaved, ...savedScenarios]
     : savedScenarios
+
+  if (basisQuery.isError || savedQuery.isError) {
+    return (
+      <LoadError
+        subject="repayment comparison"
+        className="mx-auto w-full max-w-3xl"
+        retrying={basisQuery.isFetching || savedQuery.isFetching}
+        onRetry={() => {
+          void basisQuery.refetch()
+          void savedQuery.refetch()
+        }}
+      />
+    )
+  }
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">

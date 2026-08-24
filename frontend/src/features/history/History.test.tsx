@@ -7,15 +7,18 @@ import { History } from './History'
 import {
   correctConfirmedSnapshotHistorySnapshotIdCorrectPost,
   getHistoryHistoryGet,
+  retrieveFinancialStatementFinancialStatementGet,
 } from '@/api/generated'
 
 vi.mock('@/api/generated', () => ({
   getHistoryHistoryGet: vi.fn(),
   correctConfirmedSnapshotHistorySnapshotIdCorrectPost: vi.fn(),
+  retrieveFinancialStatementFinancialStatementGet: vi.fn(),
 }))
 
 const getHistory = vi.mocked(getHistoryHistoryGet)
 const correctSnapshot = vi.mocked(correctConfirmedSnapshotHistorySnapshotIdCorrectPost)
+const retrieveStatement = vi.mocked(retrieveFinancialStatementFinancialStatementGet)
 
 function ok(data: unknown) {
   return {
@@ -107,7 +110,32 @@ function renderHistory() {
 beforeEach(() => {
   getHistory.mockReset()
   correctSnapshot.mockReset()
+  retrieveStatement.mockReset()
   getHistory.mockResolvedValue(ok(historyResponse()))
+  retrieveStatement.mockResolvedValue(
+    ok({
+      version: 1,
+      updated_at: '2026-08-01T09:00:00Z',
+      statement: {
+        statement_period: '2026-08-01',
+        currency: 'GBP',
+        income_entries: [],
+        outgoing_entries: [],
+        repayment_commitments: [],
+        resilience: {
+          accessible_savings: null,
+          protected_reserve: null,
+          current_account_balance: null,
+          known_arrears: null,
+        },
+        looking_ahead: {
+          irregular_costs: [],
+          protected_future_provisions: [],
+          expected_changes: [],
+        },
+      },
+    }),
+  )
 })
 
 describe('History', () => {
@@ -342,6 +370,27 @@ describe('History corrections', () => {
 
     expect(screen.getByText(/adds a new record/i)).toBeInTheDocument()
     expect(screen.getByText(/the original stays/i)).toBeInTheDocument()
+  })
+
+  it('submits the current saved statement rather than an incomplete correction request', async () => {
+    correctSnapshot.mockResolvedValue(ok({ snapshot_id: 'corrected' }))
+    renderHistory()
+    await userEvent.click(
+      await screen.findByRole('button', { name: /correct the august 2026 record/i }),
+    )
+    await userEvent.type(screen.getByRole('textbox', { name: /what was wrong/i }), 'Wrong rent.')
+    await userEvent.click(screen.getByRole('button', { name: /save this correction/i }))
+
+    expect(correctSnapshot).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.objectContaining({
+          statement_period: '2026-08-01',
+          correction_reason: 'Wrong rent.',
+          income_entries: [],
+          outgoing_entries: [],
+        }),
+      }),
+    )
   })
 
   it('shows the lineage once a period has been corrected', async () => {

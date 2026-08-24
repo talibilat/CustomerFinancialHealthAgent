@@ -1,6 +1,6 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
+import { Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import {
   getOverviewOverviewGet,
@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { LoadError } from '@/components/LoadError'
 import { formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
 import { DemoPresetPicker } from './DemoPresetPicker'
 
@@ -386,11 +387,12 @@ export function Overview() {
 
   if (query.isError || !query.data) {
     return (
-      <Alert variant="destructive" className="mx-auto w-full max-w-xl">
-        <AlertTriangle />
-        <AlertTitle>We can&apos;t reach the server right now</AlertTitle>
-        <AlertDescription>Your information hasn&apos;t been lost - please try again in a moment.</AlertDescription>
-      </Alert>
+      <LoadError
+        subject="information"
+        className="mx-auto w-full max-w-xl"
+        retrying={query.isFetching}
+        onRetry={() => void query.refetch()}
+      />
     )
   }
 
