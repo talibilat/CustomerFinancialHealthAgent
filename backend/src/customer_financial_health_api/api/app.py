@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(financial_statement.router)
     app.include_router(history.router)
     app.include_router(repayment_scenario.router)
+    app.include_router(repayment_scenario.saved_router)
     return app
 
 

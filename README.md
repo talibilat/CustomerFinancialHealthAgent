@@ -17,6 +17,9 @@ The proposal is visibly optional, never changes the classification by itself, an
 Without Azure OpenAI, unknown or ambiguous entries continue through the complete manual classification flow.
 The update flow is implemented as well: the customer can review and change their editable financial statement, add and remove income, outgoings, existing repayment commitments, irregular costs, and protected future provisions, supply or omit resilience information, and preview the recalculated position without confirming anything or changing history.
 A repayment can be explored against the confirmed snapshot without changing it: the result is limited to not enough reported headroom, may leave limited room, or appears manageable from the information provided, judged only against the customer's own monthly buffer rather than an invented threshold.
+A customer may explicitly save that comparison separately from financial-statement history.
+The saved scenario retains its exact basis snapshot, selected commitment where applicable, protected buffer, deterministic result, and policy version.
+If that basis is later corrected, the scenario remains unchanged and is plainly marked as using a superseded financial statement.
 A confirmed record can be corrected by creating a new snapshot that supersedes it; the original is never edited or deleted and stays visible in history with the reason given.
 History lists every confirmed record with the policy version, labels, and categories that were stored at the time, and explains changes by decomposing them into reported amounts that reconcile exactly to the change in monthly headroom, without ever inferring a cause.
 A reviewed statement can be confirmed as an immutable snapshot in one atomic transaction, with a retry or double-click returning the original record rather than duplicating history.
@@ -33,6 +36,12 @@ The remaining planned journey step is personalized explanations.
 ```bash
 cp .env.example .env  # optional; .env overrides the safe defaults in .env.example
 docker compose up --build
+```
+
+If those ports are already in use, choose alternatives without editing Compose:
+
+```bash
+BACKEND_PORT=8019 FRONTEND_PORT=5189 docker compose up --build
 ```
 
 Then open http://localhost:5173 for the overview and http://localhost:8000/health/live and http://localhost:8000/health/ready for backend health.
@@ -69,7 +78,7 @@ cd backend
 RUN_LIVE_AZURE_OPENAI_TESTS=1 uv run pytest -m live -o addopts= tests/live/test_azure_classification_live.py
 ```
 
-The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, the complete manual classification and confirmation fallback without Azure, and the zero-income, reported-shortfall, uncovered-protected-cost, and Azure-unavailable presets:
+The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, the complete manual classification and confirmation fallback without Azure, a saved scenario remaining tied to its original basis after correction, and the zero-income, reported-shortfall, uncovered-protected-cost, and Azure-unavailable presets:
 
 ```bash
 cd frontend
@@ -112,11 +121,12 @@ cd ../frontend && npm run generate-client
 9. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
 10. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
 11. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
-12. **Done.** Open **Explore a repayment** to compare a hypothetical repayment against your confirmed statement. Both an extra repayment and a change to an existing one are supported, the arithmetic is shown, and nothing is saved, changed, or recommended.
-13. **Done.** Choose any of the nine fictional presets on the overview, review the reset warning, and confirm before the active demo view changes.
-14. **Done.** Load zero income, reported shortfall, or protected outgoings not covered to see exact deterministic results and support routes that do not depend on Azure.
-15. **Done.** Load Azure unavailable, then open **Update my information** to complete the unknown outgoing through manual classification with no AI suggestion or authority.
-16. Planned: request an optional personalized explanation.
+12. **Done.** Open **Explore a repayment** to compare a hypothetical repayment against your confirmed statement. Both an extra repayment and a change to a selected existing commitment are supported, the arithmetic is shown, and nothing is changed or recommended.
+13. **Done.** Choose **Save scenario** to retain the comparison separately from statement history. Correct its basis statement, return to the repayment explorer, and see that its original values remain unchanged beneath a superseded-basis notice.
+14. **Done.** Choose any of the nine fictional presets on the overview, review the reset warning, and confirm before the active demo view changes.
+15. **Done.** Load zero income, reported shortfall, or protected outgoings not covered to see exact deterministic results and support routes that do not depend on Azure.
+16. **Done.** Load Azure unavailable, then open **Update my information** to complete the unknown outgoing through manual classification with no AI suggestion or authority.
+17. Planned: request an optional personalized explanation.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 

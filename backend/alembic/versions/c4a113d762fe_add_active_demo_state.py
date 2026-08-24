@@ -1,7 +1,7 @@
 """add active demo state
 
 Revision ID: c4a113d762fe
-Revises: 8d271b25c24f
+Revises: b784ba9c975d
 """
 
 from typing import Sequence, Union
@@ -12,7 +12,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = "c4a113d762fe"
-down_revision: Union[str, Sequence[str], None] = "8d271b25c24f"
+down_revision: Union[str, Sequence[str], None] = "b784ba9c975d"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

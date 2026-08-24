@@ -1,5 +1,7 @@
 import { expect, request } from '@playwright/test'
 
+const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL ?? 'http://localhost:8000'
+
 export default async function waitForApplicationReadiness() {
   const api = await request.newContext()
   try {
@@ -7,7 +9,7 @@ export default async function waitForApplicationReadiness() {
       .poll(
         async () => {
           try {
-            const response = await api.get('http://localhost:8000/health/ready')
+            const response = await api.get(`${apiBaseUrl}/health/ready`)
             return response.status()
           } catch {
             return 0

@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -414,3 +415,61 @@ class ScenarioResponse(BaseModel):
     buffer_shortfall: str | None
     result_code: str
     warnings: list[str]
+
+
+class ExistingRepaymentCommitmentOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    description: str
+    normalized_monthly_amount: str
+
+
+class ScenarioBasisResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    basis_snapshot_id: UUID
+    basis_statement_period: date
+    basis_monthly_headroom: str
+    existing_repayment_commitments: list[ExistingRepaymentCommitmentOut]
+
+
+class SavedScenarioRequest(BaseModel):
+    """The customer-controlled inputs needed to reproduce and save a comparison."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    basis_snapshot_id: UUID
+    mode: str
+    selected_existing_commitment_id: UUID | None = None
+    proposed_repayment: str
+    protected_monthly_buffer: str | None = None
+
+
+class SavedScenarioResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    basis_snapshot_id: UUID
+    basis_statement_period: date
+    basis_is_superseded: bool
+    mode: str
+    selected_existing_commitment_id: UUID | None
+    selected_existing_commitment_description: str | None
+    proposed_repayment: str
+    protected_monthly_buffer: str | None
+    basis_monthly_headroom: str
+    replaced_repayment: str | None
+    scenario_headroom: str
+    buffer_shortfall: str | None
+    result_code: str
+    warnings: list[str]
+    calculation_policy_version: str
+    created_at: datetime
+
+
+class SavedScenarioListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    scenarios: list[SavedScenarioResponse]
+    total: int

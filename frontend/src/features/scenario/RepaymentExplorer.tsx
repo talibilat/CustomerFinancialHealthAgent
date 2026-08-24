@@ -1,9 +1,14 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Info } from 'lucide-react'
 
-import { previewRepaymentScenarioRepaymentScenarioPreviewPost } from '@/api/generated'
-import type { ScenarioResponse } from '@/api/generated'
+import {
+  listSavedScenariosRepaymentScenariosGet,
+  previewRepaymentScenarioRepaymentScenarioPreviewPost,
+  retrieveScenarioBasisRepaymentScenarioBasisGet,
+  saveScenarioRepaymentScenariosPost,
+} from '@/api/generated'
+import type { SavedScenarioResponse, ScenarioResponse } from '@/api/generated'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -139,13 +144,80 @@ function ScenarioResultPanel({ result }: { result: ScenarioResponse }) {
   )
 }
 
+function SavedScenarioCard({ scenario }: { scenario: SavedScenarioResponse }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>
+          Based on your confirmed {formatPeriod(scenario.basis_statement_period)} statement
+        </CardDescription>
+        <CardTitle className="text-lg">
+          {RESULT_WORDING[scenario.result_code] ?? 'May leave limited room'}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {scenario.basis_is_superseded && (
+          <Alert>
+            <Info />
+            <AlertTitle>This basis statement was later corrected</AlertTitle>
+            <AlertDescription>
+              This saved scenario still uses the original statement and values. It has not been
+              recalculated against the correction.
+            </AlertDescription>
+          </Alert>
+        )}
+        <dl className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <dt className="text-sm text-muted-foreground">Headroom on its basis</dt>
+            <dd className="font-medium">{formatGbp(scenario.basis_monthly_headroom)}</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Repayment considered</dt>
+            <dd className="font-medium">{formatGbp(scenario.proposed_repayment)} repayment</dd>
+          </div>
+          <div>
+            <dt className="text-sm text-muted-foreground">Result on that basis</dt>
+            <dd className="font-medium">
+              {formatGbp(scenario.scenario_headroom)} headroom afterwards
+            </dd>
+          </div>
+        </dl>
+        {scenario.protected_monthly_buffer && (
+          <p className="text-sm text-muted-foreground">
+            Protected monthly buffer used: {formatGbp(scenario.protected_monthly_buffer)}.
+          </p>
+        )}
+        {scenario.selected_existing_commitment_description && (
+          <p className="text-sm text-muted-foreground">
+            Replaces {scenario.selected_existing_commitment_description}
+            {scenario.replaced_repayment
+              ? ` at ${formatGbp(scenario.replaced_repayment)} per month`
+              : ''}
+          </p>
+        )}
+        <p className="text-sm text-muted-foreground">
+          Saved on {new Date(scenario.created_at).toLocaleDateString('en-GB')}. This is a saved
+          comparison, not a recommendation, plan, agreement, or account change.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Calculation policy: {scenario.calculation_policy_version}. Basis reference:{' '}
+          {scenario.basis_snapshot_id}.
+        </p>
+      </CardContent>
+    </Card>
+  )
+}
+
 export function RepaymentExplorer() {
+  const queryClient = useQueryClient()
   const [mode, setMode] = useState<string>('additional')
   const [proposed, setProposed] = useState('')
-  const [replaced, setReplaced] = useState('')
+  const [selectedCommitmentId, setSelectedCommitmentId] = useState('')
   const [buffer, setBuffer] = useState('')
   const [errors, setErrors] = useState<FieldError[]>([])
   const [result, setResult] = useState<ScenarioResponse | null>(null)
+  const [saveKey, setSaveKey] = useState<string | null>(null)
+  const [justSaved, setJustSaved] = useState<SavedScenarioResponse | null>(null)
   const [status, setStatus] = useState<string | null>(null)
 
   // Switching mode recalculates from the basis snapshot rather than from
@@ -154,19 +226,33 @@ export function RepaymentExplorer() {
   function changeMode(next: string) {
     setMode(next)
     setProposed('')
-    setReplaced('')
+    setSelectedCommitmentId('')
     setErrors([])
     setResult(null)
+    setSaveKey(null)
     setStatus(null)
   }
 
+  const basisQuery = useQuery({
+    queryKey: ['repayment-scenario-basis'],
+    queryFn: async () => {
+      const response = await retrieveScenarioBasisRepaymentScenarioBasisGet()
+      if (response.error || !response.data) throw new Error('scenario_basis_unavailable')
+      return response.data
+    },
+  })
+
   const mutation = useMutation({
     mutationFn: async () => {
+      const selectedCommitment = basisQuery.data?.existing_repayment_commitments.find(
+        (commitment) => commitment.id === selectedCommitmentId,
+      )
       const response = await previewRepaymentScenarioRepaymentScenarioPreviewPost({
         body: {
           mode,
           proposed_repayment: proposed,
-          replaced_repayment: mode === 'change_existing' ? replaced : null,
+          replaced_repayment:
+            mode === 'change_existing' ? selectedCommitment?.normalized_monthly_amount : null,
           protected_monthly_buffer: buffer.trim() === '' ? null : buffer,
         } as never,
       })
@@ -183,9 +269,52 @@ export function RepaymentExplorer() {
     },
     onSuccess: (data) => {
       setResult(data)
+      setSaveKey(crypto.randomUUID())
       setStatus('Comparison updated. Nothing has been changed or agreed.')
     },
   })
+
+  const savedQuery = useQuery({
+    queryKey: ['repayment-scenarios'],
+    queryFn: async () => {
+      const response = await listSavedScenariosRepaymentScenariosGet()
+      if (response.error || !response.data) throw new Error('saved_scenarios_unavailable')
+      return response.data
+    },
+  })
+
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      if (!result || !saveKey) throw new Error('scenario_not_ready')
+      const response = await saveScenarioRepaymentScenariosPost({
+        body: {
+          basis_snapshot_id: result.basis_snapshot_id,
+          mode: result.mode,
+          selected_existing_commitment_id:
+            result.mode === 'change_existing' ? selectedCommitmentId : null,
+          proposed_repayment: result.proposed_repayment,
+          protected_monthly_buffer: result.protected_monthly_buffer,
+        },
+        headers: { 'Idempotency-Key': saveKey },
+      })
+      if (response.error || !response.data) throw new Error('scenario_save_rejected')
+      return response.data
+    },
+    onMutate: () => setStatus(null),
+    onSuccess: (saved) => {
+      setJustSaved(saved)
+      setStatus('Scenario saved. Your statement and any agreement remain unchanged.')
+      void queryClient.invalidateQueries({ queryKey: ['repayment-scenarios'] })
+    },
+    onError: () => {
+      setStatus('The scenario was not saved. Your statement and comparison are unchanged.')
+    },
+  })
+
+  const savedScenarios = savedQuery.data?.scenarios ?? []
+  const visibleSaved = justSaved && !savedScenarios.some((item) => item.id === justSaved.id)
+    ? [justSaved, ...savedScenarios]
+    : savedScenarios
 
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6">
@@ -225,14 +354,35 @@ export function RepaymentExplorer() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             {mode === 'change_existing' && (
-              <AmountField
-                id="scenario-replaced"
-                label="Amount you pay now"
-                field="replaced_repayment"
-                value={replaced}
-                onChange={setReplaced}
-                errors={errors}
-              />
+              <div>
+                <label className="text-sm text-muted-foreground" htmlFor="scenario-commitment">
+                  Repayment to change
+                </label>
+                <select
+                  id="scenario-commitment"
+                  aria-label="Repayment to change"
+                  className="border-input bg-background h-9 w-full rounded-md border px-3 py-1 text-sm shadow-xs"
+                  value={selectedCommitmentId}
+                  onChange={(event) => {
+                    setSelectedCommitmentId(event.target.value)
+                    setResult(null)
+                    setSaveKey(null)
+                  }}
+                >
+                  <option value="">Choose a repayment commitment</option>
+                  {(basisQuery.data?.existing_repayment_commitments ?? []).map((commitment) => (
+                    <option key={commitment.id} value={commitment.id}>
+                      {commitment.description} ({formatGbp(commitment.normalized_monthly_amount)} per
+                      month)
+                    </option>
+                  ))}
+                </select>
+                {basisQuery.data?.existing_repayment_commitments.length === 0 && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Your basis statement has no existing repayment commitments to change.
+                  </p>
+                )}
+              </div>
             )}
             <AmountField
               id="scenario-proposed"
@@ -258,7 +408,35 @@ export function RepaymentExplorer() {
         </CardContent>
       </Card>
 
-      {result && <ScenarioResultPanel result={result} />}
+      {result && (
+        <div className="space-y-3">
+          <ScenarioResultPanel result={result} />
+          <Button
+            type="button"
+            disabled={
+              saveMutation.isPending ||
+              (result.mode === 'change_existing' && selectedCommitmentId === '')
+            }
+            onClick={() => saveMutation.mutate()}
+          >
+            Save scenario
+          </Button>
+        </div>
+      )}
+
+      {visibleSaved.length > 0 && (
+        <section className="space-y-4" aria-labelledby="saved-scenarios-title">
+          <h2 id="saved-scenarios-title" className="text-xl font-semibold">
+            Saved scenarios
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Saved separately from your financial-statement history.
+          </p>
+          {visibleSaved.map((scenario) => (
+            <SavedScenarioCard key={scenario.id} scenario={scenario} />
+          ))}
+        </section>
+      )}
     </div>
   )
 }
