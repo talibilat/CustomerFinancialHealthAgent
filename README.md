@@ -27,7 +27,7 @@ The remaining planned journey steps are personalized explanations and demonstrat
 ## Quick start
 
 ```bash
-cp .env.example .env  # optional; Docker Compose also reads .env.example directly
+cp .env.example .env  # optional; .env overrides the safe defaults in .env.example
 docker compose up --build
 ```
 
@@ -124,7 +124,7 @@ Run and test commands are documented above only once they have been exercised fr
 
 ## Configuration
 
-Copy `.env.example` to `.env` when the executable application is available.
+Copy `.env.example` to `.env` to override the safe Docker Compose defaults.
 The deterministic product will run without Azure OpenAI values.
 To enable AI features, provide the Azure resource endpoint, authentication settings, and deployment names described in [.env.example](./.env.example).
 

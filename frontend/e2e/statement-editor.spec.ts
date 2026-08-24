@@ -46,7 +46,7 @@ test('keeps the statement editor usable at a 375px viewport', async ({ page }) =
   expect(afterAdd.document).toBeLessThanOrEqual(afterAdd.viewport)
 })
 
-test('manual classification fallback keeps confirmation complete without Azure', async ({ page }) => {
+test('manual classification path stays completable and visible in history', async ({ page }) => {
   await page.goto('/statement')
   await expect(page.getByRole('textbox', { name: 'Rent amount' })).toBeVisible()
 
@@ -69,7 +69,6 @@ test('manual classification fallback keeps confirmation complete without Azure',
   await expect(page.getByRole('status')).toContainText('Your statement was saved')
 
   await expect(pottery.getByText(/tell us what this was for/i)).toBeVisible()
-  await expect(pottery.getByText(/optional suggestion/i)).toHaveCount(0)
   await pottery.getByRole('combobox', { name: 'Weekend pottery category' }).selectOption('leisure_and_hobbies')
   await pottery.getByRole('combobox', { name: 'Weekend pottery treatment' }).selectOption('flexible_living_cost')
   await page.getByRole('button', { name: 'Save my statement' }).click()
@@ -81,7 +80,14 @@ test('manual classification fallback keeps confirmation complete without Azure',
   await page.getByRole('button', { name: 'Confirm this statement' }).click()
   await expect(page.getByText(/this statement is saved to your history/i)).toBeVisible()
 
-  await page.reload()
+  await page.getByRole('link', { name: 'History' }).click()
+  await page
+    .getByRole('button', { name: /view august 2026 statement details/i })
+    .first()
+    .click()
+  await expect(page.getByText('Weekend pottery', { exact: true })).toBeVisible()
+
+  await page.getByRole('link', { name: 'Update my information' }).click()
   await page.getByRole('button', { name: 'Remove Weekend pottery' }).click()
   await page.getByRole('button', { name: 'Save my statement' }).click()
   await expect(page.getByRole('status')).toContainText('Your statement was saved')

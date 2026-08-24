@@ -67,6 +67,8 @@ def test_the_adapter_makes_one_minimal_stateless_structured_request():
     assert "previous_response_id" not in request
     assert "tools" not in request
     assert len(request["input"]) == 2
+    assert [item["type"] for item in request["input"]] == ["message", "message"]
+    assert "decimal string between 0 and 1 inclusive" in request["input"][0]["content"]
     supplied = json.loads(request["input"][1]["content"])
     assert supplied == {
         "description": "dance class",

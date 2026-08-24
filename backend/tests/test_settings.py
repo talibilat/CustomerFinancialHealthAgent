@@ -17,3 +17,13 @@ def test_response_storage_cannot_be_enabled(monkeypatch):
 
     with pytest.raises(ValidationError, match="response storage must remain disabled"):
         Settings(_env_file=None)
+
+
+def test_invalid_environment_values_are_not_echoed_in_validation_errors(monkeypatch):
+    misplaced_secret = "super-secret-value"
+    monkeypatch.setenv("AZURE_OPENAI_AUTH_MODE", misplaced_secret)
+
+    with pytest.raises(ValidationError) as raised:
+        Settings(_env_file=None)
+
+    assert misplaced_secret not in str(raised.value)
