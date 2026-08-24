@@ -110,6 +110,12 @@ def calculate_scenario(
     if monthly_headroom <= 0:
         warnings.append("no_reported_headroom_before_this_repayment")
 
+    # Meeting a buffer of zero satisfies the documented boundary, but being
+    # left with nothing at all is fragile whatever the customer set, so it is
+    # always said out loud rather than resting on the result code.
+    if scenario_headroom == 0:
+        warnings.append("no_headroom_left_after_this_repayment")
+
     return ScenarioResult(
         calculation_policy_version=SCENARIO_POLICY_VERSION,
         mode=mode,

@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
+import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -84,6 +84,18 @@ export const getHistoryHistoryGet = <ThrowOnError extends boolean = false>(optio
  */
 export const correctConfirmedSnapshotHistorySnapshotIdCorrectPost = <ThrowOnError extends boolean = false>(options: Options<CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, ThrowOnError>) => (options.client ?? client).post<CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, ThrowOnError>({
     url: '/history/{snapshot_id}/correct',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Preview Repayment Scenario
+ */
+export const previewRepaymentScenarioRepaymentScenarioPreviewPost = <ThrowOnError extends boolean = false>(options: Options<PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, ThrowOnError>) => (options.client ?? client).post<PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, ThrowOnError>({
+    url: '/repayment-scenario/preview',
     ...options,
     headers: {
         'Content-Type': 'application/json',

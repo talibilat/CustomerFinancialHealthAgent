@@ -168,3 +168,22 @@ class TestBasisIsUnchanged:
 
         assert result.basis_monthly_headroom == HEADROOM
         assert result.proposed_repayment == Decimal("100.00")
+
+
+class TestFragileOutcomes:
+    def test_leaving_nothing_at_all_is_flagged_even_when_the_buffer_is_met(self):
+        """A zero buffer is the customer's choice, but zero left is still fragile."""
+        result = scenario(
+            proposed_repayment=Decimal("500.00"), protected_monthly_buffer=Decimal("0.00")
+        )
+
+        assert result.scenario_headroom == Decimal("0.00")
+        assert result.result_code == ScenarioResultCode.APPEARS_MANAGEABLE
+        assert "no_headroom_left_after_this_repayment" in result.warnings
+
+    def test_a_scenario_that_leaves_something_is_not_flagged_that_way(self):
+        result = scenario(
+            proposed_repayment=Decimal("499.99"), protected_monthly_buffer=Decimal("0.00")
+        )
+
+        assert "no_headroom_left_after_this_repayment" not in result.warnings
