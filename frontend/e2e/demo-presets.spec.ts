@@ -3,7 +3,10 @@ import { expect, test } from '@playwright/test'
 async function loadPreset(page, label: string) {
   await page.goto('/overview')
   await page.getByLabel('Demonstration preset').selectOption({ label })
-  await expect(page.getByRole('alert')).toContainText('Fictional demo data will be reset')
+  const resetWarning = page.getByRole('alert').filter({
+    hasText: 'Fictional demo data will be reset',
+  })
+  await expect(resetWarning).toBeVisible()
   await page.getByRole('button', { name: `Load ${label}` }).click()
   await expect(page.getByRole('status').filter({ hasText: 'Fictional demo data loaded.' })).toBeVisible()
 }
