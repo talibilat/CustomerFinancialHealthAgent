@@ -131,7 +131,7 @@ GitHub Actions runs that generated-contract check and the isolated Playwright su
 5. **Done.** Enter an unusable amount such as a negative number, a blank, or `NaN`. Every invalid field is listed in an error summary that takes focus and links back to the control, everything already entered is preserved, and the response says nothing was saved.
 6. **Done.** See each outgoing classified deterministically. Rent, food, and communications resolve from global rules with no provider involved.
 7. **Done.** Add an ambiguous outgoing such as `Apple`. It refuses to guess, asks what it was for, and can remember the answer so the same wording resolves next time regardless of case, spacing, or punctuation.
-8. **Done.** With Azure configured, add an unknown outgoing to receive a bounded optional classification proposal. The category and treatment stay empty until the customer explicitly chooses the suggestion. With Azure unavailable or disabled, the same entry follows the manual flow.
+8. **Done, and exercised against a live Azure resource.** With Azure configured, add an unknown outgoing to receive a bounded optional classification proposal. The category and treatment stay empty until the customer explicitly chooses the suggestion. With Azure unavailable or disabled, the same entry follows the manual flow.
 9. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
 10. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
 11. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
@@ -140,9 +140,83 @@ GitHub Actions runs that generated-contract check and the isolated Playwright su
 14. **Done.** Choose any of the nine fictional presets on the overview, review the reset warning, and confirm before the active demo view changes.
 15. **Done.** Load zero income, reported shortfall, or protected outgoings not covered to see exact deterministic results and support routes that do not depend on Azure.
 16. **Done.** Load Azure unavailable, then open **Update my information** to complete the unknown outgoing through manual classification with no AI suggestion or authority.
-17. Planned: request an optional personalized explanation.
+17. **Done.** Choose **Explain this more simply** on the overview. The deterministic explanation stays visible and usable throughout, wording that fails validation is replaced by deterministic copy, and accepted wording is rendered as plain text rather than markup.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
+
+## Architecture
+
+The browser application is React and TypeScript built with Vite. The backend is FastAPI over PostgreSQL. They are separate processes so the API boundary, its schemas, and its transaction handling are visible rather than hidden inside one framework.
+
+**Financial rules live in pure Python domain modules** under `backend/src/customer_financial_health_api/domain/`. They import no FastAPI, no SQLAlchemy, and no provider SDK, so every arithmetic rule is testable without a database or a network. FastAPI is an adapter: it parses, authorizes, calls one domain or repository operation, and translates the result.
+
+**The application owns its transaction boundaries.** Confirming a statement writes the snapshot, its line items, the settled classifications, and the policy versions inside one transaction that either commits together or rolls back together. Concurrency is handled with explicit row locks rather than hope: the editable statement is locked while its version is checked, and the snapshot being corrected is locked while its successor is checked. Both are covered by tests that fail when the lock is removed.
+
+**Confirmed snapshots are immutable.** Nothing updates one after commit. A correction writes a new snapshot linked to the one it supersedes, and a unique constraint on that link means a supersession chain cannot fork even if application code were wrong.
+
+**The TypeScript client is generated** from FastAPI's OpenAPI document and committed. CI regenerates it and fails on a diff, because mocked component tests cannot catch a drifted contract - that happened once during this build and only `tsc -b` caught it.
+
+**Provider adapters are bounded.** Azure OpenAI is consulted only after customer preferences and deterministic rules have failed to settle an entry. Its output is validated before a customer sees it, and every failure path resolves to the same state as having no provider at all.
+
+## How the numbers are calculated
+
+All money is Python `Decimal` and fixed-precision PostgreSQL `NUMERIC(12,2)`. No binary floating point touches an amount.
+
+**Frequency normalization** converts a reported amount to an average month using one versioned policy, `normalization-policy-v1`:
+
+```text
+weekly       amount * 52 / 12        fortnightly  amount * 26 / 12
+four-weekly  amount * 13 / 12        quarterly    amount * 4 / 12
+monthly      amount                  annual       amount / 12
+```
+
+Each line is quantized to two places with `ROUND_HALF_UP` at that boundary, and the original amount and frequency are always retained beside the normalized value. Four-weekly is deliberately 13 payments a year, not 12.
+
+**Worked example, from the seeded customer** (verified in the running application):
+
+```text
+income     Wages                  2450.00 monthly      -> 2450.00
+outgoing   Rent                    950.00 monthly      ->  950.00
+outgoing   Food and housekeeping   120.00 weekly       ->  520.00
+outgoing   Mobile and broadband     45.00 four-weekly  ->   48.75
+                                          outgoings    -> 1518.75
+
+monthly headroom = 2450.00 - 1518.75 = 931.25
+```
+
+**Resilience is kept separate from cash flow.** `savings above reserve = max(0, savings - reserve)` and `reserve gap = max(0, reserve - savings)`. The seeded customer reports £300.00 savings against a £1,000.00 reserve, giving a £700.00 reserve gap and a below-reserve result, while monthly headroom stays £931.25. Savings never become income and never offset a shortfall.
+
+**Repayment scenarios** compare against an unchanged basis snapshot under `scenario-policy-v1`. Additional mode subtracts the proposal once; change-existing mode frees the selected commitment and adds the replacement once. The result is only ever `not_enough_reported_headroom`, `may_leave_limited_room`, or `appears_manageable_from_the_information_provided`.
+
+Boundaries are explicit and inclusive, verified against the £931.25 basis:
+
+| Proposal | Buffer | Headroom after | Result |
+|---|---|---|---|
+| 931.25 | 0.00 | 0.00 | appears manageable, plus a limitation that nothing is left |
+| 931.26 | - | -0.01 | not enough reported headroom |
+| 731.25 | 200.00 | 200.00 | appears manageable (meeting the buffer counts as meeting it) |
+| 731.26 | 200.00 | 199.99 | may leave limited room, shortfall 0.01 |
+| 100.00 | none | 831.25 | may leave limited room, `protected_buffer_missing` |
+
+Without a customer-supplied buffer the result stays qualified rather than inventing a threshold to judge against.
+
+**Change explanations reconcile exactly.** Income moves headroom with it and an outgoing moves it against, so the signed component changes always sum to the change in monthly headroom. Offsetting changes stay individually visible while summing to zero. A first snapshot is reported as a baseline, not a trend.
+
+**Policy versions are stored with each snapshot** and read back from storage. Historical results are never recalculated with today's rules.
+
+## Security and privacy
+
+**The data is fictional.** One seeded demonstration customer, no real people, no bank credentials, no account numbers.
+
+**Ownership is enforced, not deferred.** Production authentication is out of scope, but customer-scoped authorization is not. Every customer-owned record carries `customer_id`, and every read and write requires customer context. A request for another customer's statement, snapshot, correction, or saved scenario returns a response byte-identical to one for an identifier that never existed, so ownership cannot be discovered by trying identifiers. Tests compare whole responses rather than status codes, because differing wording would itself leak.
+
+**Data sent to Azure OpenAI is minimal.** Classification receives an outgoing description and the approved category and treatment identifiers. It never receives amounts, the financial statement, or any identifier. Requests are stateless (`store=false`), with a ten-second timeout and one retry.
+
+**Provider output is untrusted.** Structured output guarantees a shape, not trustworthiness. Every response is checked against a closed key set and the category and treatment allow-lists, and its reason must contain no markup, no link, no figure, and no claim of authority. Anything failing becomes no suggestion, which is the same state as having no provider configured.
+
+**Logs deliberately omit almost everything.** An unexpected failure records a correlation identifier, the operation, and the exception type - never the exception message and never a traceback, either of which can carry a connection string, a credential, or a reported amount. This makes production diagnosis harder from logs alone, and it is the only version that cannot leak.
+
+**Known limitations, stated plainly.** This is not production-ready and makes no compliance claim. There is no authentication, no authorization beyond the single demonstration customer, no encryption at rest beyond what PostgreSQL provides by default, no retention or deletion schedule, no rate limiting, and no monitoring. Multi-currency, Open Banking, and dated cash-flow forecasting are out of scope. The `.env` file is for local use only and must never carry a real key into source control.
 
 ## Documentation
 
@@ -171,4 +245,13 @@ Production authentication, Open Banking, document verification, repayment recomm
 
 ## Submission reminders
 
-Before submission, update the time-spent section in `DECISIONS.md`, export the complete AI prompt history, verify every documented command from a clean checkout, and add screenshots or a short demonstration recording.
+Every command documented above has been rerun and passed against the final repository state: the backend suite, the frontend component suite, the clean-environment Docker smoke, the Playwright journeys, and the separately gated live Azure classification check.
+
+The following remain outstanding and can only be done by the candidate. They are listed here because they are not done, not as a checklist that has been completed:
+
+- Record the actual design, research, implementation, testing, and documentation time in `DECISIONS.md`. It must not be estimated after the fact.
+- Export the complete AI prompt history and review it for credentials or unrelated sensitive material before sharing.
+- Add screenshots or a short demonstration recording of the connected journey.
+- Confirm the repository is public or shared with the reviewers, and send the submission at least 24 hours before the interview.
+
+No public deployment has been made, so no public URL is claimed.
