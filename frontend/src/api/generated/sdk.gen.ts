@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
+import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, ListSavedScenariosRepaymentScenariosGetData, ListSavedScenariosRepaymentScenariosGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetData, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetErrors, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetResponses, RetrieveScenarioBasisRepaymentScenarioBasisGetData, RetrieveScenarioBasisRepaymentScenarioBasisGetResponses, SaveScenarioRepaymentScenariosPostData, SaveScenarioRepaymentScenariosPostErrors, SaveScenarioRepaymentScenariosPostResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -92,6 +92,11 @@ export const correctConfirmedSnapshotHistorySnapshotIdCorrectPost = <ThrowOnErro
 });
 
 /**
+ * Retrieve Scenario Basis
+ */
+export const retrieveScenarioBasisRepaymentScenarioBasisGet = <ThrowOnError extends boolean = false>(options?: Options<RetrieveScenarioBasisRepaymentScenarioBasisGetData, ThrowOnError>) => (options?.client ?? client).get<RetrieveScenarioBasisRepaymentScenarioBasisGetResponses, unknown, ThrowOnError>({ url: '/repayment-scenario/basis', ...options });
+
+/**
  * Preview Repayment Scenario
  */
 export const previewRepaymentScenarioRepaymentScenarioPreviewPost = <ThrowOnError extends boolean = false>(options: Options<PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, ThrowOnError>) => (options.client ?? client).post<PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, ThrowOnError>({
@@ -102,3 +107,25 @@ export const previewRepaymentScenarioRepaymentScenarioPreviewPost = <ThrowOnErro
         ...options.headers
     }
 });
+
+/**
+ * List Saved Scenarios
+ */
+export const listSavedScenariosRepaymentScenariosGet = <ThrowOnError extends boolean = false>(options?: Options<ListSavedScenariosRepaymentScenariosGetData, ThrowOnError>) => (options?.client ?? client).get<ListSavedScenariosRepaymentScenariosGetResponses, unknown, ThrowOnError>({ url: '/repayment-scenarios', ...options });
+
+/**
+ * Save Scenario
+ */
+export const saveScenarioRepaymentScenariosPost = <ThrowOnError extends boolean = false>(options: Options<SaveScenarioRepaymentScenariosPostData, ThrowOnError>) => (options.client ?? client).post<SaveScenarioRepaymentScenariosPostResponses, SaveScenarioRepaymentScenariosPostErrors, ThrowOnError>({
+    url: '/repayment-scenarios',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * Retrieve Saved Scenario
+ */
+export const retrieveSavedScenarioRepaymentScenariosScenarioIdGet = <ThrowOnError extends boolean = false>(options: Options<RetrieveSavedScenarioRepaymentScenariosScenarioIdGetData, ThrowOnError>) => (options.client ?? client).get<RetrieveSavedScenarioRepaymentScenariosScenarioIdGetResponses, RetrieveSavedScenarioRepaymentScenariosScenarioIdGetErrors, ThrowOnError>({ url: '/repayment-scenarios/{scenario_id}', ...options });

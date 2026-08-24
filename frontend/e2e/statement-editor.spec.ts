@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test'
 
+const apiBaseUrl = process.env.PLAYWRIGHT_API_BASE_URL ?? 'http://localhost:8000'
+
 test('edits and previews a statement without changing confirmed history', async ({ page, request }) => {
-  const confirmedBefore = await request.get('http://localhost:8000/overview')
+  const confirmedBefore = await request.get(`${apiBaseUrl}/overview`)
   expect(confirmedBefore.ok()).toBeTruthy()
   const originalOverview = await confirmedBefore.json()
 
@@ -18,7 +20,7 @@ test('edits and previews a statement without changing confirmed history', async 
   await expect(page.getByRole('status')).toContainText('Preview updated')
   await expect(page.getByText('Your position if you save this')).toBeVisible()
 
-  const confirmedAfter = await request.get('http://localhost:8000/overview')
+  const confirmedAfter = await request.get(`${apiBaseUrl}/overview`)
   expect(confirmedAfter.ok()).toBeTruthy()
   expect(await confirmedAfter.json()).toEqual(originalOverview)
 
@@ -91,4 +93,110 @@ test('manual classification path stays completable and visible in history', asyn
   await page.getByRole('button', { name: 'Remove Weekend pottery' }).click()
   await page.getByRole('button', { name: 'Save my statement' }).click()
   await expect(page.getByRole('status')).toContainText('Your statement was saved')
+})
+
+test('saved scenario keeps its original values after its basis is corrected', async ({
+  page,
+  request,
+}) => {
+  await page.goto('/repayment')
+  await page
+    .getByRole('textbox', { name: 'Amount you are considering' })
+    .fill('123.45')
+  await page
+    .getByRole('textbox', { name: /monthly buffer you want to keep/i })
+    .fill('200.00')
+  await page.getByRole('button', { name: 'Compare this repayment' }).click()
+  await expect(page.getByRole('status')).toContainText('Comparison updated')
+  await page.getByRole('button', { name: 'Save scenario' }).click()
+  await expect(page.getByRole('status')).toContainText('Scenario saved')
+
+  const savedAmount = page.getByText('£123.45 repayment').first()
+  const savedCard = savedAmount.locator('xpath=ancestor::*[@data-slot="card"][1]')
+  await expect(savedCard).toContainText(/based on your confirmed .* statement/i)
+  const originalCardText = await savedCard.textContent()
+  const originalHeadroom = originalCardText?.match(/[-£\d,.]+ headroom afterwards/)?.[0]
+  expect(originalHeadroom).toBeTruthy()
+
+  const scenarios = await request.get(`${apiBaseUrl}/repayment-scenarios`)
+  expect(scenarios.ok()).toBeTruthy()
+  const saved = (await scenarios.json()).scenarios.find(
+    (scenario: { proposed_repayment: string }) => scenario.proposed_repayment === '123.45',
+  )
+  expect(saved).toBeTruthy()
+
+  const statementResponse = await request.get(
+    `${apiBaseUrl}/financial-statement?statement_period=${saved.basis_statement_period}`,
+  )
+  expect(statementResponse.ok()).toBeTruthy()
+  const editable = (await statementResponse.json()).statement
+  const entry = (item: {
+    entry_id: string
+    description: string
+    original_amount: string
+    original_frequency: string
+    classification: null | { display_category: string; outgoing_treatment: string }
+  }) => ({
+    entry_id: item.entry_id,
+    description: item.description,
+    amount:
+      item.description === 'Rent'
+        ? (Number(item.original_amount) + 1).toFixed(2)
+        : item.original_amount,
+    frequency: item.original_frequency,
+    classification: item.classification?.display_category
+      ? {
+          display_category: item.classification.display_category,
+          outgoing_treatment: item.classification.outgoing_treatment,
+          remember: false,
+        }
+      : null,
+  })
+  const correction = await request.post(
+    `${apiBaseUrl}/history/${saved.basis_snapshot_id}/correct`,
+    {
+      headers: { 'Idempotency-Key': `e2e-correct-${saved.basis_snapshot_id}` },
+      data: {
+        statement_period: editable.statement_period,
+        currency: editable.currency,
+        income_entries: editable.income_entries.map(entry),
+        outgoing_entries: editable.outgoing_entries.map(entry),
+        repayment_commitments: editable.repayment_commitments.map(entry),
+        resilience: editable.resilience,
+        looking_ahead: {
+          irregular_costs: editable.looking_ahead.irregular_costs.map(entry),
+          protected_future_provisions:
+            editable.looking_ahead.protected_future_provisions.map(entry),
+          expected_changes: editable.looking_ahead.expected_changes.map(
+            (change: {
+              entry_id: string
+              description: string
+              kind: string
+              original_amount: string
+              original_frequency: string
+            }) => ({
+              entry_id: change.entry_id,
+              description: change.description,
+              kind: change.kind,
+              amount: change.original_amount,
+              frequency: change.original_frequency,
+            }),
+          ),
+        },
+        correction_reason: 'The rent amount was one pound too low.',
+      },
+    },
+  )
+  expect(correction.ok()).toBeTruthy()
+
+  await page.reload()
+  const unchangedCard = page
+    .getByText('£123.45 repayment')
+    .first()
+    .locator('xpath=ancestor::*[@data-slot="card"][1]')
+  await expect(unchangedCard).toContainText('This basis statement was later corrected')
+  await expect(unchangedCard).toContainText(
+    'This saved scenario still uses the original statement and values',
+  )
+  await expect(unchangedCard).toContainText(originalHeadroom as string)
 })
