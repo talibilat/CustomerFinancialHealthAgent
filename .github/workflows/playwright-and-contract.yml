@@ -72,3 +72,16 @@ jobs:
       - name: Run against a freshly built isolated application
         working-directory: frontend
         run: npm run test:e2e
+
+  clean-environment-smoke:
+    name: Clean environment and failure smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SMOKE_COMPOSE_PROJECT_NAME: cfha-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Verify clean startup, persistence, and schema failures
+        run: ./scripts/smoke-clean-environment.sh

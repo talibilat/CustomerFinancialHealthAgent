@@ -111,6 +111,7 @@ async function amountField(name: RegExp) {
 }
 
 beforeEach(() => {
+  sessionStorage.clear()
   retrieve.mockReset()
   update.mockReset()
   preview.mockReset()

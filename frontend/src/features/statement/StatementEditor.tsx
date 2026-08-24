@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { AlertTriangle, Info, Plus, Trash2 } from 'lucide-react'
+import { Info, Plus, Trash2 } from 'lucide-react'
 
 import {
   confirmFinancialStatementFinancialStatementConfirmPost,
@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
+import { LoadError } from '@/components/LoadError'
 import { FREQUENCIES, formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
 
 type FieldError = { field: string; code: string; message: string }
@@ -103,6 +104,49 @@ type EntryCollection =
   | 'looking_ahead.irregular_costs'
   | 'looking_ahead.protected_future_provisions'
   | 'looking_ahead.expected_changes'
+
+type StoredDraft = {
+  statementPeriod: string
+  version: number
+  draft: Draft
+}
+
+const DRAFT_STORAGE_KEY = 'financial-statement-unsaved-draft'
+
+function isStoredDraft(value: unknown): value is StoredDraft {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Partial<StoredDraft>
+  const draft = candidate.draft as Partial<Draft> | undefined
+  return (
+    typeof candidate.statementPeriod === 'string' &&
+    typeof candidate.version === 'number' &&
+    typeof draft === 'object' &&
+    draft !== null &&
+    Array.isArray(draft.income) &&
+    Array.isArray(draft.outgoings) &&
+    Array.isArray(draft.commitments) &&
+    Array.isArray(draft.irregularCosts) &&
+    Array.isArray(draft.futureProvisions) &&
+    Array.isArray(draft.expectedChanges) &&
+    typeof draft.resilience === 'object' &&
+    draft.resilience !== null
+  )
+}
+
+function loadStoredDraft(statementPeriod: string, version: number | undefined): StoredDraft | null {
+  if (version === undefined) return null
+  try {
+    const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY)
+    const stored: unknown = raw ? JSON.parse(raw) : null
+    return isStoredDraft(stored) &&
+      stored.statementPeriod === statementPeriod &&
+      stored.version === version
+      ? stored
+      : null
+  } catch {
+    return null
+  }
+}
 
 const EXPECTED_CHANGE_KINDS = [
   { value: 'income_increase', label: 'Income going up' },
@@ -811,6 +855,7 @@ function PreviewPanel({ preview }: { preview: StatementPreviewResponse }) {
 
 export function StatementEditor({ statementPeriod }: { statementPeriod: string }) {
   const [draft, setDraft] = useState<Draft | null>(null)
+  const [isDirty, setIsDirty] = useState(false)
   const [version, setVersion] = useState<number | null>(null)
   const [errors, setErrors] = useState<FieldError[]>([])
   const [summaryMessage, setSummaryMessage] = useState<string | null>(null)
@@ -838,8 +883,17 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
     refetchOnReconnect: false,
   })
 
-  const activeDraft = draft ?? (query.data ? toDraft(query.data) : null)
-  const activeVersion = version ?? query.data?.version ?? null
+  const storedDraft = loadStoredDraft(statementPeriod, query.data?.version)
+  const activeDraft = draft ?? storedDraft?.draft ?? (query.data ? toDraft(query.data) : null)
+  const activeVersion = version ?? storedDraft?.version ?? query.data?.version ?? null
+  const visibleStatus =
+    status ?? (draft === null && storedDraft ? 'We restored your unsaved changes from this browser tab.' : null)
+
+  useEffect(() => {
+    if (!draft || !isDirty || activeVersion === null) return
+    const stored: StoredDraft = { statementPeriod, version: activeVersion, draft }
+    sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(stored))
+  }, [activeVersion, draft, isDirty, statementPeriod])
 
   // A rejected submission must never discard what the customer typed, so the
   // draft is only ever replaced by a fresh retrieval or an accepted save.
@@ -901,6 +955,8 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       setStatus(null)
     },
     onSuccess: (data) => {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY)
+      setIsDirty(false)
       setDraft(toDraft(data))
       setVersion(data.version)
       setPreview(null)
@@ -935,6 +991,8 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
       setStatus(null)
     },
     onSuccess: (data) => {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY)
+      setIsDirty(false)
       setConfirmed(data)
       setStatus('Your statement was saved to your history.')
     },
@@ -963,15 +1021,17 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
 
   if (query.isError || !activeDraft) {
     return (
-      <Alert variant="destructive" className="mx-auto w-full max-w-3xl">
-        <AlertTriangle />
-        <AlertTitle>We can&apos;t reach the server right now</AlertTitle>
-        <AlertDescription>Your information hasn&apos;t been lost - please try again in a moment.</AlertDescription>
-      </Alert>
+      <LoadError
+        subject="information"
+        className="mx-auto w-full max-w-3xl"
+        retrying={query.isFetching}
+        onRetry={() => void query.refetch()}
+      />
     )
   }
 
   const update = (patch: Partial<Draft>) => {
+    setIsDirty(true)
     setDraft({ ...activeDraft, ...patch })
     setPreview(null)
     setStatus(null)
@@ -996,6 +1056,8 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
                 const refreshed = await query.refetch()
                 if (!refreshed.data) return
                 setDraft(toDraft(refreshed.data))
+                sessionStorage.removeItem(DRAFT_STORAGE_KEY)
+                setIsDirty(false)
                 setVersion(refreshed.data.version)
                 setErrors([])
                 setSummaryMessage(null)
@@ -1009,9 +1071,9 @@ export function StatementEditor({ statementPeriod }: { statementPeriod: string }
         </Alert>
       )}
 
-      {status && (
+      {visibleStatus && (
         <p role="status" className="text-sm text-muted-foreground">
-          {status}
+          {visibleStatus}
         </p>
       )}
 

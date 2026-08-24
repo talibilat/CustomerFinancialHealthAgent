@@ -46,6 +46,13 @@ BACKEND_PORT=8019 FRONTEND_PORT=5189 docker compose up --build
 
 Then open http://localhost:5173 for the overview and http://localhost:8000/health/live and http://localhost:8000/health/ready for backend health.
 This has been verified from a clean checkout (`docker compose down -v` followed by `docker compose up --build`) with no Azure OpenAI variables set.
+The repeatable clean-environment reviewer smoke uses its own Compose project, ports, and disposable volume:
+
+```bash
+./scripts/smoke-clean-environment.sh
+```
+
+It verifies database readiness, migrations and an empty-volume seed, idempotent seeding, restart persistence, health semantics, operation without Azure configuration, schema mismatch reporting, and a safely contained migration failure.
 
 ## Running the tests
 
