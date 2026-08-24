@@ -158,6 +158,53 @@ class TestRefusals:
         assert response.status_code == 422
         assert "Traceback" not in response.text
 
+    def test_provider_generation_does_not_hold_a_database_transaction_open(
+        self, seeded, db_session
+    ):
+        from customer_financial_health_api.api.dependencies import (
+            get_classification_provider,
+            get_db,
+        )
+
+        current = retrieve(seeded)
+        update = confirmation_body(seeded)
+        update["outgoing_entries"].append(
+            {
+                "entry_id": "unknown-confirm-boundary",
+                "description": "Dance class",
+                "amount": "25.00",
+                "frequency": "monthly",
+            }
+        )
+        update.pop("checked_information")
+        assert seeded.put(
+            "/financial-statement",
+            json={**update, "expected_version": current["version"]},
+        ).status_code == 200
+
+        transaction_states: list[bool] = []
+
+        class ProviderFake:
+            def suggest(self, **kwargs):
+                transaction_states.append(db_session.in_transaction())
+                return None
+
+        def same_session():
+            yield db_session
+
+        body = confirmation_body(seeded)
+        seeded.app.dependency_overrides[get_db] = same_session
+        seeded.app.dependency_overrides[get_classification_provider] = ProviderFake
+        try:
+            response = confirm(seeded, body, key="provider-transaction-boundary")
+        finally:
+            seeded.app.dependency_overrides.pop(get_db, None)
+            seeded.app.dependency_overrides[get_classification_provider] = lambda: None
+
+        assert response.status_code == 409
+        assert response.json()["detail"]["code"] == "classifications_unresolved"
+        assert transaction_states == [False]
+
 
 class TestHistoryIsPreserved:
     def test_confirming_never_edits_the_previous_snapshot(self, seeded):
