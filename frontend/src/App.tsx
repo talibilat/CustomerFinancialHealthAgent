@@ -1,6 +1,7 @@
 import { BrowserRouter, NavLink, Navigate, Route, Routes } from 'react-router-dom'
 
 import { Overview } from '@/features/overview/Overview'
+import { History } from '@/features/history/History'
 import { StatementEditor } from '@/features/statement/StatementEditor'
 import { cn } from '@/lib/utils'
 
@@ -11,6 +12,7 @@ const STATEMENT_PERIOD = '2026-08-01'
 const NAV_ITEMS = [
   { to: '/overview', label: 'Overview' },
   { to: '/statement', label: 'Update my information' },
+  { to: '/history', label: 'History' },
 ]
 
 function Navigation() {
@@ -52,6 +54,7 @@ function App() {
               path="/statement"
               element={<StatementEditor statementPeriod={STATEMENT_PERIOD} />}
             />
+            <Route path="/history" element={<History />} />
           </Routes>
         </main>
       </div>
