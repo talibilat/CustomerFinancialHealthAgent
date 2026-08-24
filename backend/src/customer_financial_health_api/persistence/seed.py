@@ -84,6 +84,9 @@ def seed_demo_data(session: Session) -> None:
         outgoing_entries=outgoing_entries,
         resilience=resilience,
         classifications=classifications,
+        repayment_commitment_entry_ids={
+            entry.entry_id for entry in REPAYMENT_COMMITMENTS
+        },
     )
 
     save_editable_statement(

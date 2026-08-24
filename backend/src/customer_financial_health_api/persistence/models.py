@@ -7,6 +7,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
@@ -81,6 +82,74 @@ class ConfirmedSnapshot(Base):
         CheckConstraint("protected_reserve >= 0", name="ck_snapshot_protected_reserve_non_negative"),
         CheckConstraint("known_arrears >= 0", name="ck_snapshot_known_arrears_non_negative"),
         UniqueConstraint("supersedes_snapshot_id", name="uq_snapshot_single_successor"),
+        UniqueConstraint("id", "customer_id", name="uq_snapshot_id_customer"),
+    )
+
+
+class RepaymentScenario(Base):
+    """An explicitly saved comparison tied to one immutable basis snapshot."""
+
+    __tablename__ = "repayment_scenarios"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    basis_snapshot_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), nullable=False, index=True
+    )
+    mode: Mapped[str] = mapped_column(String, nullable=False)
+    selected_existing_commitment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("snapshot_outgoing_entries.id"), nullable=True
+    )
+    proposed_repayment: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    protected_monthly_buffer: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    basis_monthly_headroom: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    replaced_repayment: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    scenario_headroom: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
+    buffer_shortfall: Mapped[Decimal | None] = mapped_column(MONEY, nullable=True)
+    result_code: Mapped[str] = mapped_column(String, nullable=False)
+    warnings: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    calculation_policy_version: Mapped[str] = mapped_column(String, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("proposed_repayment > 0", name="ck_scenario_proposed_positive"),
+        CheckConstraint(
+            "mode IN ('additional', 'change_existing')", name="ck_scenario_mode_supported"
+        ),
+        CheckConstraint(
+            "result_code IN ('not_enough_reported_headroom', "
+            "'may_leave_limited_room', "
+            "'appears_manageable_from_the_information_provided')",
+            name="ck_scenario_result_supported",
+        ),
+        CheckConstraint(
+            "(mode = 'additional' AND selected_existing_commitment_id IS NULL "
+            "AND replaced_repayment IS NULL) OR "
+            "(mode = 'change_existing' AND selected_existing_commitment_id IS NOT NULL "
+            "AND replaced_repayment IS NOT NULL)",
+            name="ck_scenario_selected_commitment_matches_mode",
+        ),
+        CheckConstraint(
+            "protected_monthly_buffer >= 0", name="ck_scenario_buffer_non_negative"
+        ),
+        CheckConstraint(
+            "replaced_repayment >= 0", name="ck_scenario_replaced_non_negative"
+        ),
+        CheckConstraint(
+            "buffer_shortfall >= 0", name="ck_scenario_buffer_shortfall_non_negative"
+        ),
+        UniqueConstraint(
+            "customer_id", "idempotency_key", name="uq_scenario_customer_idempotency_key"
+        ),
+        ForeignKeyConstraint(
+            ["basis_snapshot_id", "customer_id"],
+            ["confirmed_snapshots.id", "confirmed_snapshots.customer_id"],
+            name="fk_scenario_owned_basis",
+        ),
     )
 
 
@@ -274,6 +343,8 @@ class SnapshotOutgoingEntry(Base):
     snapshot_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    entry_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    section: Mapped[str] = mapped_column(String, nullable=False)
     # Nullable so the migration is safe against snapshots confirmed before
     # these were recorded; every new confirmation sets them.
     description: Mapped[str | None] = mapped_column(String, nullable=True)
