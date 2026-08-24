@@ -53,6 +53,65 @@ class TestInternalFailures:
 
         assert first != second
 
+    def test_a_database_constraint_failure_returns_a_safe_stable_conflict(
+        self, seeded, monkeypatch
+    ):
+        from sqlalchemy.exc import IntegrityError
+
+        import customer_financial_health_api.api.routers.overview as overview_router
+
+        monkeypatch.setattr(
+            overview_router,
+            "get_effective_snapshot",
+            lambda *a, **k: (_ for _ in ()).throw(
+                IntegrityError(
+                    "INSERT INTO confirmed_snapshots (monthly_headroom) VALUES (%s)",
+                    {"monthly_headroom": "950.00"},
+                    RuntimeError("postgresql://cfha:secret@db/financial_health"),
+                )
+            ),
+        )
+
+        response = seeded.get("/overview")
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["code"] == "data_conflict"
+        assert detail["correlation_id"]
+        assert "950.00" not in response.text
+        assert "secret" not in response.text
+
+    def test_a_retryable_transaction_failure_returns_a_safe_stable_conflict(
+        self, seeded, monkeypatch
+    ):
+        from sqlalchemy.exc import OperationalError
+
+        import customer_financial_health_api.api.routers.overview as overview_router
+
+        class SerializationFailure(RuntimeError):
+            sqlstate = "40001"
+
+        monkeypatch.setattr(
+            overview_router,
+            "get_effective_snapshot",
+            lambda *a, **k: (_ for _ in ()).throw(
+                OperationalError(
+                    "UPDATE confirmed_snapshots SET supersedes_snapshot_id=%s",
+                    {"supersedes_snapshot_id": "customer-financial-data"},
+                    SerializationFailure("postgresql://cfha:secret@db serialization failure"),
+                )
+            ),
+        )
+
+        response = seeded.get("/overview")
+
+        assert response.status_code == 409
+        detail = response.json()["detail"]
+        assert detail["code"] == "retryable_conflict"
+        assert detail["correlation_id"]
+        assert "customer-financial-data" not in response.text
+        assert "secret" not in response.text
+
 
 class TestMalformedRequests:
     def test_malformed_json_is_a_stable_client_error(self, seeded):

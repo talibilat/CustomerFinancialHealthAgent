@@ -312,6 +312,7 @@ def confirm_financial_statement(
     provider: ClassificationSuggestionProvider | None = Depends(get_classification_provider),
 ) -> ConfirmedSnapshotResponse:
     customer = _current_customer(session)
+    customer_id = customer.id
     statement = _validated(submission)
 
     if not submission.checked_information:
@@ -327,7 +328,7 @@ def confirm_financial_statement(
 
     confirmed, remember = _submitted_classifications(submission)
     stored = get_editable_statement(
-        session, customer_id=customer.id, statement_period=statement.statement_period
+        session, customer_id=customer_id, statement_period=statement.statement_period
     )
     if stored is not None:
         submitted_descriptions = {
@@ -343,23 +344,25 @@ def confirm_financial_statement(
 
     # Anything the customer did not settle explicitly still resolves through the
     # deterministic workflow; only genuinely unresolved entries block the save.
-    preferences = get_customer_preferences(session, customer_id=customer.id)
+    preferences = get_customer_preferences(session, customer_id=customer_id)
+    bounded_provider = _demo_bounded_provider(session, provider)
+    session.rollback()
     classifications = _resolve_classifications(
         statement,
         confirmed=confirmed,
         preferences=preferences,
-        provider=_demo_bounded_provider(session, provider),
+        provider=bounded_provider,
     )
 
     for _, outcome in remember:
         save_customer_preference(
-            session, customer_id=customer.id, preference=outcome.as_preference()
+            session, customer_id=customer_id, preference=outcome.as_preference()
         )
 
     try:
         snapshot = confirm_statement(
             session,
-            customer_id=customer.id,
+            customer_id=customer_id,
             statement=statement,
             classifications=classifications,
             expected_version=submission.expected_version,
