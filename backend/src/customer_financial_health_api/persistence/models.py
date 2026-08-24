@@ -45,9 +45,13 @@ class ConfirmedSnapshot(Base):
     monthly_headroom: Mapped[Decimal] = mapped_column(MONEY, nullable=False)
     result_code: Mapped[str] = mapped_column(String, nullable=False)
     warnings: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # A correction points at the snapshot it replaces. The unique constraint
+    # below allows many NULLs but only one successor per snapshot, so a
+    # supersession chain can never fork.
     supersedes_snapshot_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("confirmed_snapshots.id"), nullable=True
     )
+    correction_reason: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Optional resilience information. Missing entirely (all NULL) when the
     # customer did not provide it; current_account_balance may be negative
@@ -76,6 +80,7 @@ class ConfirmedSnapshot(Base):
         CheckConstraint("accessible_savings >= 0", name="ck_snapshot_accessible_savings_non_negative"),
         CheckConstraint("protected_reserve >= 0", name="ck_snapshot_protected_reserve_non_negative"),
         CheckConstraint("known_arrears >= 0", name="ck_snapshot_known_arrears_non_negative"),
+        UniqueConstraint("supersedes_snapshot_id", name="uq_snapshot_single_successor"),
     )
 
 
