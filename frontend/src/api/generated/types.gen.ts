@@ -5,6 +5,40 @@ export type ClientOptions = {
 };
 
 /**
+ * ChangeExplanationOut
+ */
+export type ChangeExplanationOut = {
+    /**
+     * Is Baseline
+     */
+    is_baseline: boolean;
+    /**
+     * Previous Period
+     */
+    previous_period: string | null;
+    /**
+     * Current Period
+     */
+    current_period: string;
+    /**
+     * Monthly Headroom Change
+     */
+    monthly_headroom_change: string | null;
+    /**
+     * Increases
+     */
+    increases: Array<ComponentChangeOut>;
+    /**
+     * Decreases
+     */
+    decreases: Array<ComponentChangeOut>;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+};
+
+/**
  * ClassificationIn
  *
  * What the customer accepted or corrected for one outgoing.
@@ -52,6 +86,32 @@ export type ClassificationOut = {
      * Reason Code
      */
     reason_code: string | null;
+};
+
+/**
+ * ComponentChangeOut
+ */
+export type ComponentChangeOut = {
+    /**
+     * Description
+     */
+    description: string;
+    /**
+     * Section
+     */
+    section: string;
+    /**
+     * Previous Monthly
+     */
+    previous_monthly: string;
+    /**
+     * Current Monthly
+     */
+    current_monthly: string;
+    /**
+     * Signed Headroom Effect
+     */
+    signed_headroom_effect: string;
 };
 
 /**
@@ -216,6 +276,83 @@ export type HttpValidationError = {
      * Detail
      */
     detail?: Array<ValidationError>;
+};
+
+/**
+ * HistoryResponse
+ */
+export type HistoryResponse = {
+    /**
+     * Total
+     */
+    total: number;
+    /**
+     * Limit
+     */
+    limit: number;
+    /**
+     * Offset
+     */
+    offset: number;
+    /**
+     * Snapshots
+     */
+    snapshots: Array<HistorySnapshotOut>;
+    /**
+     * Series
+     */
+    series: Array<SeriesPointOut>;
+    latest_change: ChangeExplanationOut | null;
+};
+
+/**
+ * HistorySnapshotOut
+ */
+export type HistorySnapshotOut = {
+    /**
+     * Snapshot Id
+     */
+    snapshot_id: string;
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Confirmed At
+     */
+    confirmed_at: string;
+    /**
+     * Calculation Policy Version
+     */
+    calculation_policy_version: string;
+    /**
+     * Normalized Monthly Income
+     */
+    normalized_monthly_income: string;
+    /**
+     * Normalized Monthly Outgoings
+     */
+    normalized_monthly_outgoings: string;
+    /**
+     * Monthly Headroom
+     */
+    monthly_headroom: string;
+    /**
+     * Result Code
+     */
+    result_code: string;
+    /**
+     * Warnings
+     */
+    warnings: Array<string>;
+    /**
+     * Income Entries
+     */
+    income_entries: Array<StatementEntryOut>;
+    /**
+     * Outgoing Entries
+     */
+    outgoing_entries: Array<StatementEntryOut>;
 };
 
 /**
@@ -405,6 +542,32 @@ export type ResilienceSectionOut = {
      * Known Arrears
      */
     known_arrears: string | null;
+};
+
+/**
+ * SeriesPointOut
+ */
+export type SeriesPointOut = {
+    /**
+     * Statement Period
+     */
+    statement_period: string;
+    /**
+     * Normalized Monthly Income
+     */
+    normalized_monthly_income: string;
+    /**
+     * Normalized Monthly Outgoings
+     */
+    normalized_monthly_outgoings: string;
+    /**
+     * Monthly Headroom
+     */
+    monthly_headroom: string;
+    /**
+     * Result Code
+     */
+    result_code: string;
 };
 
 /**
@@ -806,3 +969,37 @@ export type ConfirmFinancialStatementFinancialStatementConfirmPostResponses = {
 };
 
 export type ConfirmFinancialStatementFinancialStatementConfirmPostResponse = ConfirmFinancialStatementFinancialStatementConfirmPostResponses[keyof ConfirmFinancialStatementFinancialStatementConfirmPostResponses];
+
+export type GetHistoryHistoryGetData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Offset
+         */
+        offset?: number;
+    };
+    url: '/history';
+};
+
+export type GetHistoryHistoryGetErrors = {
+    /**
+     * Validation Error
+     */
+    422: HttpValidationError;
+};
+
+export type GetHistoryHistoryGetError = GetHistoryHistoryGetErrors[keyof GetHistoryHistoryGetErrors];
+
+export type GetHistoryHistoryGetResponses = {
+    /**
+     * Successful Response
+     */
+    200: HistoryResponse;
+};
+
+export type GetHistoryHistoryGetResponse = GetHistoryHistoryGetResponses[keyof GetHistoryHistoryGetResponses];

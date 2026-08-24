@@ -237,10 +237,135 @@
           }
         }
       }
+    },
+    "/history": {
+      "get": {
+        "tags": [
+          "history"
+        ],
+        "summary": "Get History",
+        "operationId": "get_history_history_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "ChangeExplanationOut": {
+        "properties": {
+          "is_baseline": {
+            "type": "boolean",
+            "title": "Is Baseline"
+          },
+          "previous_period": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Period"
+          },
+          "current_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Current Period"
+          },
+          "monthly_headroom_change": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Headroom Change"
+          },
+          "increases": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentChangeOut"
+            },
+            "type": "array",
+            "title": "Increases"
+          },
+          "decreases": {
+            "items": {
+              "$ref": "#/components/schemas/ComponentChangeOut"
+            },
+            "type": "array",
+            "title": "Decreases"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "is_baseline",
+          "previous_period",
+          "current_period",
+          "monthly_headroom_change",
+          "increases",
+          "decreases",
+          "warnings"
+        ],
+        "title": "ChangeExplanationOut"
+      },
       "ClassificationIn": {
         "properties": {
           "display_category": {
@@ -332,6 +457,40 @@
           "reason_code"
         ],
         "title": "ClassificationOut"
+      },
+      "ComponentChangeOut": {
+        "properties": {
+          "description": {
+            "type": "string",
+            "title": "Description"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "previous_monthly": {
+            "type": "string",
+            "title": "Previous Monthly"
+          },
+          "current_monthly": {
+            "type": "string",
+            "title": "Current Monthly"
+          },
+          "signed_headroom_effect": {
+            "type": "string",
+            "title": "Signed Headroom Effect"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "description",
+          "section",
+          "previous_monthly",
+          "current_monthly",
+          "signed_headroom_effect"
+        ],
+        "title": "ComponentChangeOut"
       },
       "ConfirmedSnapshotResponse": {
         "properties": {
@@ -584,6 +743,132 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "HistoryResponse": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          },
+          "snapshots": {
+            "items": {
+              "$ref": "#/components/schemas/HistorySnapshotOut"
+            },
+            "type": "array",
+            "title": "Snapshots"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/SeriesPointOut"
+            },
+            "type": "array",
+            "title": "Series"
+          },
+          "latest_change": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChangeExplanationOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "total",
+          "limit",
+          "offset",
+          "snapshots",
+          "series",
+          "latest_change"
+        ],
+        "title": "HistoryResponse"
+      },
+      "HistorySnapshotOut": {
+        "properties": {
+          "snapshot_id": {
+            "type": "string",
+            "title": "Snapshot Id"
+          },
+          "statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Period"
+          },
+          "confirmed_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Confirmed At"
+          },
+          "calculation_policy_version": {
+            "type": "string",
+            "title": "Calculation Policy Version"
+          },
+          "normalized_monthly_income": {
+            "type": "string",
+            "title": "Normalized Monthly Income"
+          },
+          "normalized_monthly_outgoings": {
+            "type": "string",
+            "title": "Normalized Monthly Outgoings"
+          },
+          "monthly_headroom": {
+            "type": "string",
+            "title": "Monthly Headroom"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "income_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Income Entries"
+          },
+          "outgoing_entries": {
+            "items": {
+              "$ref": "#/components/schemas/StatementEntryOut"
+            },
+            "type": "array",
+            "title": "Outgoing Entries"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "snapshot_id",
+          "statement_period",
+          "confirmed_at",
+          "calculation_policy_version",
+          "normalized_monthly_income",
+          "normalized_monthly_outgoings",
+          "monthly_headroom",
+          "result_code",
+          "warnings",
+          "income_entries",
+          "outgoing_entries"
+        ],
+        "title": "HistorySnapshotOut"
       },
       "LookingAheadIn": {
         "properties": {
@@ -958,6 +1243,41 @@
         ],
         "title": "ResilienceSectionOut",
         "description": "The resilience values the customer reported, not the calculated result."
+      },
+      "SeriesPointOut": {
+        "properties": {
+          "statement_period": {
+            "type": "string",
+            "format": "date",
+            "title": "Statement Period"
+          },
+          "normalized_monthly_income": {
+            "type": "string",
+            "title": "Normalized Monthly Income"
+          },
+          "normalized_monthly_outgoings": {
+            "type": "string",
+            "title": "Normalized Monthly Outgoings"
+          },
+          "monthly_headroom": {
+            "type": "string",
+            "title": "Monthly Headroom"
+          },
+          "result_code": {
+            "type": "string",
+            "title": "Result Code"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "statement_period",
+          "normalized_monthly_income",
+          "normalized_monthly_outgoings",
+          "monthly_headroom",
+          "result_code"
+        ],
+        "title": "SeriesPointOut"
       },
       "StatementConfirmationRequest": {
         "properties": {
