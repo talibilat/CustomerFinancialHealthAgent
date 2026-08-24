@@ -47,10 +47,29 @@ class DifficultyOut(BaseModel):
     support_routes: list[SupportRouteOut]
 
 
+class PersonalizedExplanationOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
+    text: str
+    outcome: str
+    deployment: str | None
+    prompt_version: str
+    schema_version: str
+    created_at: datetime
+
+
+class PersonalizedExplanationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    snapshot_id: UUID
+
+
 class OverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     customer_id: str
+    snapshot_id: UUID
     statement_period: date
     confirmed_at: datetime
     calculation_policy_version: str
@@ -63,6 +82,8 @@ class OverviewResponse(BaseModel):
     outgoing_entries: list[MoneyEntryOut]
     resilience: ResilienceOut
     difficulty: DifficultyOut
+    deterministic_explanation: str
+    personalized_explanation: PersonalizedExplanationOut | None
 
 
 class DemoPresetOut(BaseModel):

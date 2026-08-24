@@ -11,6 +11,7 @@ from sqlalchemy import (
     Integer,
     Numeric,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -166,6 +167,37 @@ class RepaymentScenario(Base):
             ["basis_snapshot_id", "customer_id"],
             ["confirmed_snapshots.id", "confirmed_snapshots.customer_id"],
             name="fk_scenario_owned_basis",
+        ),
+    )
+
+
+class PersonalizedExplanation(Base):
+    """Plain-text optional wording bound to one owned immutable snapshot."""
+
+    __tablename__ = "personalized_explanations"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False, index=True
+    )
+    snapshot_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    request_outcome: Mapped[str] = mapped_column(String, nullable=False)
+    deployment: Mapped[str | None] = mapped_column(String, nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String, nullable=False)
+    schema_version: Mapped[str] = mapped_column(String, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String, nullable=False)
+    request_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "customer_id", "idempotency_key", name="uq_guidance_customer_idempotency_key"
+        ),
+        ForeignKeyConstraint(
+            ["snapshot_id", "customer_id"],
+            ["confirmed_snapshots.id", "confirmed_snapshots.customer_id"],
+            name="fk_guidance_owned_snapshot",
         ),
     )
 
