@@ -22,7 +22,11 @@ History lists every confirmed record with the policy version, labels, and catego
 A reviewed statement can be confirmed as an immutable snapshot in one atomic transaction, with a retry or double-click returning the original record rather than duplicating history.
 Unusable values are refused against their own field, an invalid submission preserves everything entered and states that nothing was saved, and a submission built from a superseded version returns a conflict the customer can refresh from.
 The frontend uses Tailwind CSS and shadcn/ui components.
-The remaining planned journey steps are personalized explanations and demonstration presets.
+The overview now provides deterministic difficulty states for zero income, incomplete information, reported shortfalls, and protected outgoings that exceed income.
+These states preserve exact pennies and select review, Ophelos support, and the official MoneyHelper Debt Advice Locator without using AI.
+Nine fictional demonstration presets can be loaded from the overview after an explicit reset warning and confirmation.
+Preset retries are idempotent, prior aggregates are preserved, and the reset endpoint is unavailable unless `DEMO_MODE=true`.
+The remaining planned journey step is personalized explanations.
 
 ## Quick start
 
@@ -65,7 +69,7 @@ cd backend
 RUN_LIVE_AZURE_OPENAI_TESTS=1 uv run pytest -m live -o addopts= tests/live/test_azure_classification_live.py
 ```
 
-The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, and the complete manual classification and confirmation fallback without Azure:
+The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, the complete manual classification and confirmation fallback without Azure, and the zero-income, reported-shortfall, uncovered-protected-cost, and Azure-unavailable presets:
 
 ```bash
 cd frontend
@@ -109,8 +113,10 @@ cd ../frontend && npm run generate-client
 10. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
 11. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
 12. **Done.** Open **Explore a repayment** to compare a hypothetical repayment against your confirmed statement. Both an extra repayment and a change to an existing one are supported, the arithmetic is shown, and nothing is saved, changed, or recommended.
-13. Planned: request an optional personalized explanation.
-14. Planned: load a zero-income, shortfall, or AI-unavailable demonstration state.
+13. **Done.** Choose any of the nine fictional presets on the overview, review the reset warning, and confirm before the active demo view changes.
+14. **Done.** Load zero income, reported shortfall, or protected outgoings not covered to see exact deterministic results and support routes that do not depend on Azure.
+15. **Done.** Load Azure unavailable, then open **Update my information** to complete the unknown outgoing through manual classification with no AI suggestion or authority.
+16. Planned: request an optional personalized explanation.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 
@@ -126,6 +132,7 @@ Run and test commands are documented above only once they have been exercised fr
 
 Copy `.env.example` to `.env` to override the safe Docker Compose defaults.
 The deterministic product will run without Azure OpenAI values.
+The demo preset reset endpoint is available only when `DEMO_MODE=true`; set it to `false` in any non-demo environment.
 To enable AI features, provide the Azure resource endpoint, authentication settings, and deployment names described in [.env.example](./.env.example).
 
 Never commit a real Azure OpenAI key.

@@ -265,4 +265,63 @@ describe('Overview', () => {
     expect(await screen.findByText('£800.00')).toBeInTheDocument()
     expect(screen.getByText(/add accessible savings and a protected reserve/i)).toBeInTheDocument()
   })
+
+  it('announces exact shortfall support without treating flexible costs as spare money', async () => {
+    mockedGetOverview.mockResolvedValue({
+      data: {
+        customer_id: 'c1',
+        statement_period: '2026-08-01',
+        confirmed_at: '2026-08-01T09:00:00Z',
+        calculation_policy_version: 'normalization-policy-v1',
+        normalized_monthly_income: '1000.00',
+        normalized_monthly_outgoings: '1000.01',
+        monthly_headroom: '-0.01',
+        result_code: 'shortfall',
+        warnings: [],
+        income_entries: [],
+        outgoing_entries: [],
+        resilience: emptyResilience(),
+        difficulty: {
+          result_code: 'reported_shortfall',
+          title: 'Reported outgoings are above income',
+          explanation: 'The information reported shows an exact monthly shortfall of £0.01. Every reported living cost remains part of this result, including costs whose amount may vary.',
+          shortfall: '0.01',
+          protected_monthly_outgoings: '700.00',
+          warnings: ['reported_shortfall'],
+          support_routes: [
+            {
+              code: 'review_information',
+              label: 'Review your information',
+              description: 'Check what you reported.',
+              url: '/statement',
+              external: false,
+            },
+            {
+              code: 'contact_ophelos',
+              label: 'Contact Ophelos support',
+              description: 'Talk to our support team placeholder.',
+              url: 'mailto:support@example.ophelos.com',
+              external: false,
+            },
+            {
+              code: 'moneyhelper_debt_advice',
+              label: 'Find free independent debt advice',
+              description: 'Use the official locator.',
+              url: 'https://www.moneyhelper.org.uk/en/money-troubles/dealing-with-debt/debt-advice-locator',
+              external: true,
+            },
+          ],
+        },
+      },
+      error: undefined,
+    } as never)
+
+    renderWithQueryClient()
+
+    const result = (await screen.findByText('Reported outgoings are above income')).closest('[role="status"]')
+    expect(result).not.toBeNull()
+    expect(result).toHaveTextContent(/exact monthly shortfall of £0.01/i)
+    expect(screen.getByRole('link', { name: /free independent debt advice/i })).toHaveAttribute('target', '_blank')
+    expect(document.body.textContent).not.toMatch(/disposable|failed affordability|must pay/i)
+  })
 })

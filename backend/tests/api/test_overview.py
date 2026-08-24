@@ -31,6 +31,7 @@ def test_overview_returns_closed_schema_for_seeded_customer(client, db_session):
         "income_entries",
         "outgoing_entries",
         "resilience",
+        "difficulty",
     }
     assert body["normalized_monthly_income"] == "2450.00"
     assert body["result_code"] in {"surplus", "balanced", "shortfall"}

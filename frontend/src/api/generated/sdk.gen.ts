@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
+import type { ConfirmFinancialStatementFinancialStatementConfirmPostData, ConfirmFinancialStatementFinancialStatementConfirmPostErrors, ConfirmFinancialStatementFinancialStatementConfirmPostResponses, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostData, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostErrors, CorrectConfirmedSnapshotHistorySnapshotIdCorrectPostResponses, GetHistoryHistoryGetData, GetHistoryHistoryGetErrors, GetHistoryHistoryGetResponses, GetOverviewOverviewGetData, GetOverviewOverviewGetResponses, ListDemoPresetsDemoPresetsGetData, ListDemoPresetsDemoPresetsGetResponses, LivenessHealthLiveGetData, LivenessHealthLiveGetResponses, PreviewFinancialStatementFinancialStatementPreviewPostData, PreviewFinancialStatementFinancialStatementPreviewPostErrors, PreviewFinancialStatementFinancialStatementPreviewPostResponses, PreviewRepaymentScenarioRepaymentScenarioPreviewPostData, PreviewRepaymentScenarioRepaymentScenarioPreviewPostErrors, PreviewRepaymentScenarioRepaymentScenarioPreviewPostResponses, ReadinessHealthReadyGetData, ReadinessHealthReadyGetResponses, ResetDemoDemoResetPostData, ResetDemoDemoResetPostErrors, ResetDemoDemoResetPostResponses, RetrieveFinancialStatementFinancialStatementGetData, RetrieveFinancialStatementFinancialStatementGetErrors, RetrieveFinancialStatementFinancialStatementGetResponses, UpdateFinancialStatementFinancialStatementPutData, UpdateFinancialStatementFinancialStatementPutErrors, UpdateFinancialStatementFinancialStatementPutResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -27,6 +27,23 @@ export const livenessHealthLiveGet = <ThrowOnError extends boolean = false>(opti
  * Readiness
  */
 export const readinessHealthReadyGet = <ThrowOnError extends boolean = false>(options?: Options<ReadinessHealthReadyGetData, ThrowOnError>) => (options?.client ?? client).get<ReadinessHealthReadyGetResponses, unknown, ThrowOnError>({ url: '/health/ready', ...options });
+
+/**
+ * List Demo Presets
+ */
+export const listDemoPresetsDemoPresetsGet = <ThrowOnError extends boolean = false>(options?: Options<ListDemoPresetsDemoPresetsGetData, ThrowOnError>) => (options?.client ?? client).get<ListDemoPresetsDemoPresetsGetResponses, unknown, ThrowOnError>({ url: '/demo/presets', ...options });
+
+/**
+ * Reset Demo
+ */
+export const resetDemoDemoResetPost = <ThrowOnError extends boolean = false>(options: Options<ResetDemoDemoResetPostData, ThrowOnError>) => (options.client ?? client).post<ResetDemoDemoResetPostResponses, ResetDemoDemoResetPostErrors, ThrowOnError>({
+    url: '/demo/reset',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
 
 /**
  * Get Overview

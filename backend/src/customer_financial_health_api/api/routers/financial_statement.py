@@ -51,6 +51,7 @@ from customer_financial_health_api.persistence.repository import (
     UnresolvedClassifications,
     confirm_statement,
     get_customer_preferences,
+    get_active_demo_preset,
     save_customer_preference,
     StaleStatementVersion,
     get_demo_customer,
@@ -73,6 +74,15 @@ from customer_financial_health_api.api.statement_support import (
 )
 
 router = APIRouter(prefix="/financial-statement", tags=["financial-statement"])
+
+
+def _demo_bounded_provider(
+    session: Session,
+    provider: ClassificationSuggestionProvider | None,
+) -> ClassificationSuggestionProvider | None:
+    if get_active_demo_preset(session) == "azure_unavailable":
+        return None
+    return provider
 
 
 
@@ -143,7 +153,7 @@ def retrieve_financial_statement(
     return _statement_response(
         stored,
         get_customer_preferences(session, customer_id=customer.id),
-        provider,
+        _demo_bounded_provider(session, provider),
     )
 
 
@@ -206,7 +216,7 @@ def update_financial_statement(
     return _statement_response(
         saved,
         get_customer_preferences(session, customer_id=customer.id),
-        provider,
+        _demo_bounded_provider(session, provider),
     )
 
 
@@ -240,7 +250,7 @@ def preview_financial_statement(
         statement,
         confirmed=already_confirmed,
         preferences=preferences,
-        provider=provider,
+        provider=_demo_bounded_provider(session, provider),
     )
     unresolved = [
         entry_id
@@ -326,7 +336,7 @@ def confirm_financial_statement(
         statement,
         confirmed=confirmed,
         preferences=preferences,
-        provider=provider,
+        provider=_demo_bounded_provider(session, provider),
     )
 
     for _, outcome in remember:

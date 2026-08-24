@@ -17,7 +17,7 @@ from customer_financial_health_api.domain.statement import (
     ResilienceInput,
     StatementEntry,
 )
-from customer_financial_health_api.persistence.models import Customer
+from customer_financial_health_api.persistence.models import Customer, DemoState
 from customer_financial_health_api.persistence.repository import (
     create_customer,
     save_confirmed_snapshot,
@@ -101,3 +101,4 @@ def seed_demo_data(session: Session) -> None:
         ),
         expected_version=None,
     )
+    session.add(DemoState(id=1, active_customer_id=customer.id, active_preset="mixed_resilience"))

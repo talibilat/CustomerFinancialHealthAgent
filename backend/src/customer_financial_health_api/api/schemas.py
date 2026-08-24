@@ -24,6 +24,28 @@ class ResilienceOut(BaseModel):
     warnings: list[str]
 
 
+class SupportRouteOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    description: str
+    url: str
+    external: bool
+
+
+class DifficultyOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    result_code: str
+    title: str
+    explanation: str
+    shortfall: str | None
+    protected_monthly_outgoings: str
+    warnings: list[str]
+    support_routes: list[SupportRouteOut]
+
+
 class OverviewResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -39,6 +61,36 @@ class OverviewResponse(BaseModel):
     income_entries: list[MoneyEntryOut]
     outgoing_entries: list[MoneyEntryOut]
     resilience: ResilienceOut
+    difficulty: DifficultyOut
+
+
+class DemoPresetOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    label: str
+    description: str
+    fictional: bool = True
+
+
+class DemoPresetListResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    presets: list[DemoPresetOut]
+
+
+class DemoResetRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str
+    confirmed_reset: bool = False
+
+
+class DemoResetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    preset: str
+    message: str
 
 
 # --- Editable financial statement -------------------------------------------

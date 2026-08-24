@@ -40,6 +40,7 @@ from customer_financial_health_api.domain.statement import (
 from customer_financial_health_api.persistence.models import (
     ConfirmedSnapshot,
     Customer,
+    DemoState,
     EditableFinancialStatement,
     EditableStatementEntry,
     EditableStatementExpectedChange,
@@ -117,8 +118,16 @@ def create_customer(session: Session) -> Customer:
 
 
 def get_demo_customer(session: Session) -> Customer | None:
+    active = session.get(DemoState, 1)
+    if active is not None:
+        return session.get(Customer, active.active_customer_id)
     stmt = select(Customer).order_by(Customer.created_at).limit(1)
     return session.execute(stmt).scalar_one_or_none()
+
+
+def get_active_demo_preset(session: Session) -> str | None:
+    active = session.get(DemoState, 1)
+    return active.active_preset if active is not None else None
 
 
 def _entry_rows(

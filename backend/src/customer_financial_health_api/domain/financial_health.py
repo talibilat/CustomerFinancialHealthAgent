@@ -35,6 +35,8 @@ class CurrentPositionResultCode(str, Enum):
     SURPLUS = "surplus"
     BALANCED = "balanced"
     SHORTFALL = "shortfall"
+    ZERO_INCOME = "zero_income"
+    INCOMPLETE_INFORMATION = "incomplete_information"
 
 
 @dataclass(frozen=True)
@@ -85,15 +87,21 @@ def calculate_monthly_position(
     headroom = normalized_income - normalized_outgoings
 
     warnings: list[str] = []
-    if normalized_income == 0:
+    if normalized_income == 0 and normalized_outgoings == 0:
+        warnings.append("incomplete_information")
+        result_code = CurrentPositionResultCode.INCOMPLETE_INFORMATION
+    elif normalized_income == 0:
         warnings.append("zero_income")
+        result_code = CurrentPositionResultCode.ZERO_INCOME
+    else:
+        result_code = _result_code_for(headroom)
 
     return MonthlyPositionResult(
         calculation_policy_version=NORMALIZATION_POLICY_VERSION,
         normalized_monthly_income=normalized_income,
         normalized_monthly_outgoings=normalized_outgoings,
         monthly_headroom=headroom,
-        result_code=_result_code_for(headroom),
+        result_code=result_code,
         warnings=tuple(warnings),
     )
 

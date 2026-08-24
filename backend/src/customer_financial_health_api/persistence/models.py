@@ -30,6 +30,23 @@ class Customer(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class DemoState(Base):
+    """The active fictional aggregate, present only for the controlled demo."""
+
+    __tablename__ = "demo_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    active_customer_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("customers.id"), nullable=False
+    )
+    active_preset: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (CheckConstraint("id = 1", name="ck_demo_state_singleton"),)
+
+
 class ConfirmedSnapshot(Base):
     __tablename__ = "confirmed_snapshots"
 

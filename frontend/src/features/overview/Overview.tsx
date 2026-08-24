@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
 import { getOverviewOverviewGet } from '@/api/generated'
-import type { MoneyEntryOut, OverviewResponse, ResilienceOut } from '@/api/generated'
+import type { DifficultyOut, MoneyEntryOut, OverviewResponse, ResilienceOut } from '@/api/generated'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import {
   Accordion,
@@ -15,6 +15,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
+import { DemoPresetPicker } from './DemoPresetPicker'
 
 const RESULT_PRESENTATION: Record<
   string,
@@ -23,6 +24,8 @@ const RESULT_PRESENTATION: Record<
   surplus: { label: 'Income above outgoings', icon: TrendingUp, badgeVariant: 'secondary' },
   shortfall: { label: 'Outgoings above income', icon: TrendingDown, badgeVariant: 'destructive' },
   balanced: { label: 'Income equal to outgoings', icon: Minus, badgeVariant: 'outline' },
+  zero_income: { label: 'No income reported', icon: TrendingDown, badgeVariant: 'destructive' },
+  incomplete_information: { label: 'Information incomplete', icon: Info, badgeVariant: 'outline' },
 }
 
 function ResultBadge({ resultCode }: { resultCode: string }) {
@@ -151,9 +154,47 @@ function ResilienceCard({ resilience }: { resilience: ResilienceOut }) {
   )
 }
 
+function DifficultyCard({ difficulty }: { difficulty: DifficultyOut }) {
+  if (difficulty.result_code === 'no_difficulty_identified') return null
+
+  return (
+    <Alert className="mx-auto w-full max-w-xl" role="status" aria-live="polite">
+      <Info aria-hidden="true" />
+      <AlertTitle>{difficulty.title}</AlertTitle>
+      <AlertDescription className="space-y-4">
+        <p>{difficulty.explanation}</p>
+        {difficulty.result_code === 'protected_outgoings_not_covered' && (
+          <p>Protected monthly outgoings: {formatGbp(difficulty.protected_monthly_outgoings)}</p>
+        )}
+        {difficulty.support_routes.length > 0 && (
+          <div>
+            <p className="font-medium text-foreground">Support and next steps</p>
+            <ul className="mt-2 space-y-3">
+              {difficulty.support_routes.map((route) => (
+                <li key={route.code}>
+                  <a
+                    className="font-medium underline underline-offset-4"
+                    href={route.url}
+                    {...(route.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+                  >
+                    {route.label}
+                    {route.external ? ' (opens in a new tab)' : ''}
+                  </a>
+                  <p>{route.description}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </AlertDescription>
+    </Alert>
+  )
+}
+
 function OverviewContent({ overview }: { overview: OverviewResponse }) {
   return (
     <div className="space-y-6">
+      <DemoPresetPicker />
       <Card className="mx-auto w-full max-w-xl">
         <CardHeader>
           <CardDescription>{formatPeriod(overview.statement_period)}</CardDescription>
@@ -212,6 +253,8 @@ function OverviewContent({ overview }: { overview: OverviewResponse }) {
           </Accordion>
         </CardContent>
       </Card>
+
+      {overview.difficulty && <DifficultyCard difficulty={overview.difficulty} />}
 
       <ResilienceCard resilience={overview.resilience} />
     </div>

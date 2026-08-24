@@ -1,9 +1,22 @@
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.dependencies import get_db
-from customer_financial_health_api.api.schemas import MoneyEntryOut, OverviewResponse, ResilienceOut
-from customer_financial_health_api.domain.financial_health import ResilienceResult
+from customer_financial_health_api.api.schemas import (
+    DifficultyOut,
+    MoneyEntryOut,
+    OverviewResponse,
+    ResilienceOut,
+    SupportRouteOut,
+)
+from customer_financial_health_api.domain.classification import OutgoingTreatment
+from customer_financial_health_api.domain.difficulty import assess_financial_difficulty
+from customer_financial_health_api.domain.financial_health import (
+    MonthlyPositionResult,
+    ResilienceResult,
+)
 from customer_financial_health_api.persistence.repository import (
     ConfirmedSnapshotView,
     get_demo_customer,
@@ -42,6 +55,25 @@ def _resilience_out(resilience: ResilienceResult) -> ResilienceOut:
 
 
 def _to_response(customer_id, snapshot: ConfirmedSnapshotView) -> OverviewResponse:
+    protected = sum(
+        (
+            entry.normalized_monthly_amount
+            for entry in snapshot.outgoing_entries
+            if entry.outgoing_treatment is OutgoingTreatment.PROTECTED_OUTGOING
+        ),
+        start=Decimal("0.00"),
+    )
+    difficulty = assess_financial_difficulty(
+        MonthlyPositionResult(
+            calculation_policy_version=snapshot.calculation_policy_version,
+            normalized_monthly_income=snapshot.normalized_monthly_income,
+            normalized_monthly_outgoings=snapshot.normalized_monthly_outgoings,
+            monthly_headroom=snapshot.monthly_headroom,
+            result_code=snapshot.result_code,
+            warnings=snapshot.warnings,
+        ),
+        protected,
+    )
     return OverviewResponse(
         customer_id=str(customer_id),
         statement_period=snapshot.statement_period,
@@ -55,6 +87,24 @@ def _to_response(customer_id, snapshot: ConfirmedSnapshotView) -> OverviewRespon
         income_entries=_entries_out(snapshot.income_entries),
         outgoing_entries=_entries_out(snapshot.outgoing_entries),
         resilience=_resilience_out(snapshot.resilience),
+        difficulty=DifficultyOut(
+            result_code=difficulty.result_code.value,
+            title=difficulty.title,
+            explanation=difficulty.explanation,
+            shortfall=_optional_str(difficulty.shortfall),
+            protected_monthly_outgoings=str(difficulty.protected_monthly_outgoings),
+            warnings=list(difficulty.warnings),
+            support_routes=[
+                SupportRouteOut(
+                    code=route.code.value,
+                    label=route.label,
+                    description=route.description,
+                    url=route.url,
+                    external=route.external,
+                )
+                for route in difficulty.support_routes
+            ],
+        ),
     )
 
 
