@@ -8,10 +8,13 @@ Azure OpenAI is limited to unconfirmed outgoing-classification suggestions and o
 
 ## Status
 
-Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration have been prepared.
+Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration are complete.
 The first tracer-bullet slice is implemented and verified: Docker Compose starts the frontend, backend, PostgreSQL, and a one-shot migration-and-seed step, and the browser overview shows a seeded fictional customer's normalized monthly income, outgoings, and headroom calculated by the deterministic financial-health module.
 Financial resilience is also implemented: the overview separately shows accessible savings, protected reserve, current-account balance, and known arrears, with a below/at/above-reserve result that never changes the monthly cash-flow figures above it.
-Outgoings are classified deterministically: a customer's own remembered correction wins, then global whole-phrase rules, and anything unknown or ambiguous is left for the customer rather than guessed. Azure OpenAI is not involved.
+Outgoings are classified deterministically first: a customer's own remembered correction wins, then global whole-phrase rules.
+When configured, Azure OpenAI may propose a bounded classification for an otherwise unknown outgoing.
+The proposal is visibly optional, never changes the classification by itself, and ambiguous descriptions still require the customer to confirm their meaning.
+Without Azure OpenAI, unknown or ambiguous entries continue through the complete manual classification flow.
 The update flow is implemented as well: the customer can review and change their editable financial statement, add and remove income, outgoings, existing repayment commitments, irregular costs, and protected future provisions, supply or omit resilience information, and preview the recalculated position without confirming anything or changing history.
 A repayment can be explored against the confirmed snapshot without changing it: the result is limited to not enough reported headroom, may leave limited room, or appears manageable from the information provided, judged only against the customer's own monthly buffer rather than an invented threshold.
 A confirmed record can be corrected by creating a new snapshot that supersedes it; the original is never edited or deleted and stays visible in history with the reason given.
@@ -19,12 +22,12 @@ History lists every confirmed record with the policy version, labels, and catego
 A reviewed statement can be confirmed as an immutable snapshot in one atomic transaction, with a retry or double-click returning the original record rather than duplicating history.
 Unusable values are refused against their own field, an invalid submission preserves everything entered and states that nothing was saved, and a submission built from a superseded version returns a conflict the customer can refresh from.
 The frontend uses Tailwind CSS and shadcn/ui components.
-Later journey steps below (classification, snapshot confirmation, history, repayment scenarios, personalized explanations, demonstration presets) remain planned and will follow the same vertical test-driven approach.
+The remaining planned journey steps are personalized explanations and demonstration presets.
 
 ## Quick start
 
 ```bash
-cp .env.example .env  # optional; Docker Compose also reads .env.example directly
+cp .env.example .env  # optional; .env overrides the safe defaults in .env.example
 docker compose up --build
 ```
 
@@ -54,7 +57,15 @@ npm ci
 npm run test
 ```
 
-The Playwright journey starts or reuses the Docker Compose application and verifies the connected statement preview plus the 375px layout:
+The normal backend suite excludes the separately gated live Azure check.
+Run that check only with complete Azure configuration and an explicit opt-in:
+
+```bash
+cd backend
+RUN_LIVE_AZURE_OPENAI_TESTS=1 uv run pytest -m live -o addopts= tests/live/test_azure_classification_live.py
+```
+
+The Playwright journeys start or reuse the Docker Compose application and verify the connected statement preview, the 375px layout, and the complete manual classification and confirmation fallback without Azure:
 
 ```bash
 cd frontend
@@ -93,12 +104,13 @@ cd ../frontend && npm run generate-client
 5. **Done.** Enter an unusable amount such as a negative number, a blank, or `NaN`. Every invalid field is listed in an error summary that takes focus and links back to the control, everything already entered is preserved, and the response says nothing was saved.
 6. **Done.** See each outgoing classified deterministically. Rent, food, and communications resolve from global rules with no provider involved.
 7. **Done.** Add an ambiguous outgoing such as `Apple`. It refuses to guess, asks what it was for, and can remember the answer so the same wording resolves next time regardless of case, spacing, or punctuation.
-8. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
-9. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
-10. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
-11. **Done.** Open **Explore a repayment** to compare a hypothetical repayment against your confirmed statement. Both an extra repayment and a change to an existing one are supported, the arithmetic is shown, and nothing is saved, changed, or recommended.
-12. Planned: request an optional personalized explanation.
-13. Planned: load a zero-income, shortfall, or AI-unavailable demonstration state.
+8. **Done.** With Azure configured, add an unknown outgoing to receive a bounded optional classification proposal. The category and treatment stay empty until the customer explicitly chooses the suggestion. With Azure unavailable or disabled, the same entry follows the manual flow.
+9. **Done.** Preview, review the summary, tick that you have checked the information, and confirm. The record is written once even if you double-click, and the screen explains that corrections create a new snapshot rather than editing this one.
+10. **Done.** Open **History** to see every confirmed record, one row per statement period with exact amounts, and a deterministic explanation of what moved between the two most recent periods. The first confirmed statement is shown as a starting point rather than a trend.
+11. **Done.** Correct a confirmed record from History. The correction becomes the record in effect for that period, the original stays readable at its own values with the reason given, and a correction can itself be corrected.
+12. **Done.** Open **Explore a repayment** to compare a hypothetical repayment against your confirmed statement. Both an extra repayment and a change to an existing one are supported, the arithmetic is shown, and nothing is saved, changed, or recommended.
+13. Planned: request an optional personalized explanation.
+14. Planned: load a zero-income, shortfall, or AI-unavailable demonstration state.
 
 Run and test commands are documented above only once they have been exercised from a clean checkout.
 
@@ -112,7 +124,7 @@ Run and test commands are documented above only once they have been exercised fr
 
 ## Configuration
 
-Copy `.env.example` to `.env` when the executable application is available.
+Copy `.env.example` to `.env` to override the safe Docker Compose defaults.
 The deterministic product will run without Azure OpenAI values.
 To enable AI features, provide the Azure resource endpoint, authentication settings, and deployment names described in [.env.example](./.env.example).
 

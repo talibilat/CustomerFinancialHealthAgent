@@ -89,6 +89,52 @@ class TestClassificationOnRetrieve:
         assert apple["classification"]["display_category"] is None
         assert apple["classification"]["outgoing_treatment"] is None
 
+    def test_an_unknown_outgoing_exposes_a_provider_proposal_without_confirming_it(self, seeded):
+        from customer_financial_health_api.api.app import app
+        from customer_financial_health_api.api.dependencies import get_classification_provider
+
+        class ProviderFake:
+            def suggest(self, **kwargs):
+                return {
+                    "display_category": "leisure_and_hobbies",
+                    "outgoing_treatment": "flexible_living_cost",
+                    "confidence": "0.82",
+                    "reason": "Usually a hobby.",
+                    "requires_clarification": False,
+                }
+
+        ordinary_fallback = app.dependency_overrides[get_classification_provider]
+        app.dependency_overrides[get_classification_provider] = ProviderFake
+        try:
+            current = retrieve(seeded)
+            body = submitted(current["statement"], expected_version=current["version"])
+            body["outgoing_entries"].append(
+                {
+                    "entry_id": "unknown-1",
+                    "description": "Dance class",
+                    "amount": "25.00",
+                    "frequency": "monthly",
+                }
+            )
+
+            response = seeded.put("/financial-statement", json=body)
+        finally:
+            app.dependency_overrides[get_classification_provider] = ordinary_fallback
+
+        assert response.status_code == 200
+        dance_class = outgoing_named(response.json()["statement"], "Dance class")
+        classification = dance_class["classification"]
+        assert classification["display_category"] is None
+        assert classification["source"] is None
+        assert classification["requires_confirmation"] is True
+        assert classification["suggestion"] == {
+            "display_category": "leisure_and_hobbies",
+            "outgoing_treatment": "flexible_living_cost",
+            "confidence": "0.82",
+            "reason": "Usually a hobby.",
+            "requires_clarification": False,
+        }
+
 
 class TestConfirmationAndCorrection:
     def _add_ambiguous(self, client):

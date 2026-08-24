@@ -86,6 +86,33 @@ export type ClassificationOut = {
      * Reason Code
      */
     reason_code: string | null;
+    suggestion?: ClassificationSuggestionOut | null;
+};
+
+/**
+ * ClassificationSuggestionOut
+ */
+export type ClassificationSuggestionOut = {
+    /**
+     * Display Category
+     */
+    display_category: string;
+    /**
+     * Outgoing Treatment
+     */
+    outgoing_treatment: string;
+    /**
+     * Confidence
+     */
+    confidence: string;
+    /**
+     * Reason
+     */
+    reason: string;
+    /**
+     * Requires Clarification
+     */
+    requires_clarification: boolean;
 };
 
 /**

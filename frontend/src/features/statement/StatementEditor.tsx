@@ -48,6 +48,15 @@ type ClassificationDraft = {
   /** Only a classification the customer touched is sent back. */
   touched: boolean
   remember: boolean
+  suggestion?: ClassificationSuggestionDraft
+}
+
+type ClassificationSuggestionDraft = {
+  displayCategory: string
+  outgoingTreatment: string
+  confidence: string
+  reason: string
+  requiresClarification: boolean
 }
 
 type ChangeDraft = EntryDraft & { kind: string }
@@ -108,20 +117,30 @@ function domId(fieldPath: string): string {
 }
 
 function toDraftEntry(entry: StatementEntryOut): EntryDraft {
+  const wireClassification = entry.classification
   return {
     entryId: entry.entry_id,
     description: entry.description,
     amount: entry.original_amount,
     frequency: entry.original_frequency,
     normalizedMonthlyAmount: entry.normalized_monthly_amount,
-    classification: entry.classification
+    classification: wireClassification
       ? {
-          displayCategory: entry.classification.display_category ?? '',
-          outgoingTreatment: entry.classification.outgoing_treatment ?? '',
-          requiresConfirmation: entry.classification.requires_confirmation,
-          reasonCode: entry.classification.reason_code ?? null,
+          displayCategory: wireClassification.display_category ?? '',
+          outgoingTreatment: wireClassification.outgoing_treatment ?? '',
+          requiresConfirmation: wireClassification.requires_confirmation,
+          reasonCode: wireClassification.reason_code ?? null,
           touched: false,
           remember: false,
+          suggestion: wireClassification.suggestion
+            ? {
+                displayCategory: wireClassification.suggestion.display_category,
+                outgoingTreatment: wireClassification.suggestion.outgoing_treatment,
+                confidence: wireClassification.suggestion.confidence,
+                reason: wireClassification.suggestion.reason,
+                requiresClarification: wireClassification.suggestion.requires_clarification,
+              }
+            : undefined,
         }
       : undefined,
   }
@@ -413,6 +432,14 @@ function ClassificationFields({
   const categoryError = errorFor(errors, categoryPath)
   const treatmentError = errorFor(errors, treatmentPath)
   const unresolved = classification.requiresConfirmation && !classification.touched
+  const suggestion = classification.suggestion
+  const suggestedCategory = suggestion
+    ? DISPLAY_CATEGORIES.find((category) => category.value === suggestion.displayCategory)?.label
+    : undefined
+  const suggestedTreatment = suggestion
+    ? OUTGOING_TREATMENTS.find((treatment) => treatment.value === suggestion.outgoingTreatment)?.label
+    : undefined
+  const confidence = suggestion ? Math.round(Number(suggestion.confidence) * 100) : null
 
   return (
     <div className="mt-3 border-t pt-3">
@@ -420,6 +447,41 @@ function ClassificationFields({
         <p className="mb-2 text-sm font-medium">
           Tell us what this was for. We will not guess on your behalf.
         </p>
+      )}
+
+      {unresolved && suggestion && suggestedCategory && suggestedTreatment && (
+        <div className="mb-3 rounded-lg border bg-muted/40 p-3 text-sm">
+          <p className="font-medium">Optional suggestion</p>
+          <p className="mt-1">
+            {suggestedCategory} and {suggestedTreatment}
+            {confidence !== null ? ` (${confidence}% confidence)` : ''}
+          </p>
+          <p className="mt-1 text-muted-foreground">{suggestion.reason}</p>
+          {suggestion.requiresClarification && (
+            <p className="mt-1 text-muted-foreground">
+              This description could mean different things, so please check it carefully.
+            </p>
+          )}
+          <p className="mt-1 text-muted-foreground">
+            This is only a suggestion. Nothing changes unless you choose it.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2"
+            aria-label={`Use this suggestion for ${label}`}
+            onClick={() =>
+              onChange({
+                ...classification,
+                displayCategory: suggestion.displayCategory,
+                outgoingTreatment: suggestion.outgoingTreatment,
+                touched: true,
+              })
+            }
+          >
+            Use this suggestion
+          </Button>
+        </div>
       )}
 
       <div className="grid gap-3 sm:grid-cols-2">

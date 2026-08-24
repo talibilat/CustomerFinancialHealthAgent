@@ -1,9 +1,19 @@
 from collections.abc import Iterator
+from functools import lru_cache
+
+from fastapi import Depends
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from customer_financial_health_api.settings import get_settings
+from customer_financial_health_api.providers.azure_openai import (
+    AzureClassificationSuggestionProvider,
+)
+from customer_financial_health_api.providers.openai_client import (
+    SharedOpenAIClient,
+    build_shared_openai_client,
+)
 
 _engine = None
 _session_factory = None
@@ -24,3 +34,20 @@ def get_db() -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+@lru_cache
+def get_shared_openai_client() -> SharedOpenAIClient | None:
+    """One process-wide SDK client shared by the two optional AI operations."""
+    return build_shared_openai_client(get_settings())
+
+
+def get_classification_provider(
+    configured: SharedOpenAIClient | None = Depends(get_shared_openai_client),
+):
+    if configured is None or configured.classification_deployment is None:
+        return None
+    return AzureClassificationSuggestionProvider(
+        client=configured.client,
+        deployment=configured.classification_deployment,
+    )

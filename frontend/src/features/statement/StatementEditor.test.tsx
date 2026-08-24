@@ -30,6 +30,13 @@ type ClassificationFixture = {
   taxonomy_version: string
   requires_confirmation: boolean
   reason_code: string | null
+  suggestion?: {
+    display_category: string
+    outgoing_treatment: string
+    confidence: string
+    reason: string
+    requires_clarification: boolean
+  } | null
 }
 
 function entry(entryId: string, description: string, amount: string, frequency: string, normalized: string) {
@@ -559,6 +566,46 @@ describe('StatementEditor classification', () => {
     expect(
       screen.getByText(/tell us what this was for/i),
     ).toBeInTheDocument()
+  })
+
+  it('presents a provider proposal as optional and waits for the customer to accept it', async () => {
+    const response = withClassifications()
+    response.statement.outgoing_entries[1].classification = classified({
+      display_category: null,
+      outgoing_treatment: null,
+      source: null,
+      requires_confirmation: true,
+      reason_code: 'description_unknown',
+      suggestion: {
+        display_category: 'leisure_and_hobbies',
+        outgoing_treatment: 'flexible_living_cost',
+        confidence: '0.82',
+        reason: 'Usually a hobby.',
+        requires_clarification: false,
+      },
+    }) as never
+    retrieve.mockResolvedValue(ok(response))
+
+    renderEditor()
+
+    const category = await screen.findByRole('combobox', {
+      name: /food and housekeeping category/i,
+    })
+    const treatment = screen.getByRole('combobox', {
+      name: /food and housekeeping treatment/i,
+    })
+    expect(category).toHaveValue('')
+    expect(treatment).toHaveValue('')
+    expect(screen.getByText(/optional suggestion/i)).toBeInTheDocument()
+    expect(screen.getByText(/82% confidence/i)).toBeInTheDocument()
+    expect(screen.getByText('Usually a hobby.')).toBeInTheDocument()
+
+    await userEvent.click(
+      screen.getByRole('button', { name: /use this suggestion for food and housekeeping/i }),
+    )
+
+    expect(category).toHaveValue('leisure_and_hobbies')
+    expect(treatment).toHaveValue('flexible_living_cost')
   })
 
   it('does not ask about income at all', async () => {

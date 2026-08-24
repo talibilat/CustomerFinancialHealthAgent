@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 import { useMutation, useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import { AlertTriangle, Info, Minus, TrendingDown, TrendingUp } from 'lucide-react'
 
@@ -15,6 +15,46 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { formatGbp, formatPeriod } from '@/lib/format'
 
 const PAGE_SIZE = 12
+
+function identifierLabel(value: string): string {
+  return value.replaceAll('_', ' ')
+}
+
+function StoredEntries({
+  title,
+  entries,
+}: {
+  title: string
+  entries: HistoryResponse['snapshots'][number]['income_entries']
+}) {
+  return (
+    <section>
+      <h4 className="font-medium">{title}</h4>
+      {entries.length === 0 ? (
+        <p className="mt-1 text-muted-foreground">Nothing reported.</p>
+      ) : (
+        <ul className="mt-1 space-y-2">
+          {entries.map((entry) => (
+            <li key={entry.entry_id}>
+              <span className="font-medium">{entry.description}</span>
+              <span className="block text-muted-foreground">
+                {formatGbp(entry.original_amount)} {entry.original_frequency}
+                {entry.original_frequency !== 'monthly' && (
+                  <> · {formatGbp(entry.normalized_monthly_amount)} per month</>
+                )}
+              </span>
+              {entry.classification?.display_category && (
+                <span className="block capitalize text-muted-foreground">
+                  {identifierLabel(entry.classification.display_category)}
+                </span>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  )
+}
 
 function ChangeSummary({ change }: { change: ChangeExplanationOut }) {
   if (change.is_baseline) {
@@ -163,6 +203,8 @@ function RecordsTable({
   onOlder: () => void
   onNewer: () => void
 }) {
+  const [expandedSnapshotId, setExpandedSnapshotId] = useState<string | null>(null)
+
   return (
     <Card>
       <CardHeader>
@@ -181,33 +223,66 @@ function RecordsTable({
               <th scope="col" className="py-2 pr-4 font-medium">Monthly headroom</th>
               <th scope="col" className="py-2 pr-4 font-medium">Status</th>
               <th scope="col" className="py-2 pr-4 font-medium">Calculated with</th>
+              <th scope="col" className="py-2 font-medium">Statement</th>
             </tr>
           </thead>
           <tbody>
-            {snapshots.map((snapshot) => (
-              <tr key={snapshot.snapshot_id} className="border-b last:border-0">
-                <th scope="row" className="py-2 pr-4 text-left font-normal">
-                  {formatPeriod(snapshot.statement_period)}
-                </th>
-                <td className="py-2 pr-4">
-                  {new Date(snapshot.confirmed_at).toLocaleDateString('en-GB')}
-                </td>
-                <td className="py-2 pr-4 font-medium">{formatGbp(snapshot.monthly_headroom)}</td>
-                <td className="py-2 pr-4 text-muted-foreground">
-                  {snapshot.is_effective ? (
-                    <span>In effect</span>
-                  ) : (
-                    <span>Superseded by a later correction</span>
+            {snapshots.map((snapshot) => {
+              const period = formatPeriod(snapshot.statement_period)
+              const expanded = expandedSnapshotId === snapshot.snapshot_id
+              return (
+                <Fragment key={snapshot.snapshot_id}>
+                  <tr className="border-b last:border-0">
+                    <th scope="row" className="py-2 pr-4 text-left font-normal">
+                      {period}
+                    </th>
+                    <td className="py-2 pr-4">
+                      {new Date(snapshot.confirmed_at).toLocaleDateString('en-GB')}
+                    </td>
+                    <td className="py-2 pr-4 font-medium">
+                      {formatGbp(snapshot.monthly_headroom)}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground">
+                      {snapshot.is_effective ? (
+                        <span>In effect</span>
+                      ) : (
+                        <span>Superseded by a later correction</span>
+                      )}
+                      {snapshot.correction_reason && (
+                        <span className="block">Reason given: {snapshot.correction_reason}</span>
+                      )}
+                    </td>
+                    <td className="py-2 pr-4 text-muted-foreground">
+                      {snapshot.calculation_policy_version}
+                    </td>
+                    <td className="py-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-expanded={expanded}
+                        aria-label={`${expanded ? 'Hide' : 'View'} ${period} statement details`}
+                        onClick={() =>
+                          setExpandedSnapshotId(expanded ? null : snapshot.snapshot_id)
+                        }
+                      >
+                        {expanded ? 'Hide details' : 'View details'}
+                      </Button>
+                    </td>
+                  </tr>
+                  {expanded && (
+                    <tr className="border-b bg-muted/30">
+                      <td colSpan={6} className="p-4">
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <StoredEntries title="Income" entries={snapshot.income_entries} />
+                          <StoredEntries title="Outgoings" entries={snapshot.outgoing_entries} />
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                  {snapshot.correction_reason && (
-                    <span className="block">Reason given: {snapshot.correction_reason}</span>
-                  )}
-                </td>
-                <td className="py-2 pr-4 text-muted-foreground">
-                  {snapshot.calculation_policy_version}
-                </td>
-              </tr>
-            ))}
+                </Fragment>
+              )
+            })}
           </tbody>
         </table>
 

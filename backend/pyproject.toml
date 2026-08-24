@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "alembic>=1.19.1",
+    "azure-identity>=1.25.3",
     "fastapi>=0.141.1",
+    "openai>=3.3.1",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.15.0",
     "sqlalchemy>=2.0.52",
@@ -19,7 +21,7 @@ migrate-and-seed = "customer_financial_health_api.scripts.migrate_and_seed:main"
 export-openapi = "customer_financial_health_api.scripts.export_openapi:main"
 
 [build-system]
-requires = ["uv_build>=0.9.30,<0.10.0"]
+requires = ["uv_build>=0.9.30,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
@@ -31,3 +33,7 @@ dev = [
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+addopts = "-m 'not live'"
+markers = [
+    "live: explicitly enabled tests that call a configured external provider",
+]

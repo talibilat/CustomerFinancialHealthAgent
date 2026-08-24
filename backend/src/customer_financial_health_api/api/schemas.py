@@ -125,6 +125,17 @@ class ClassificationOut(BaseModel):
     taxonomy_version: str
     requires_confirmation: bool
     reason_code: str | None
+    suggestion: "ClassificationSuggestionOut | None" = None
+
+
+class ClassificationSuggestionOut(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_category: str
+    outgoing_treatment: str
+    confidence: str
+    reason: str
+    requires_clarification: bool
 
 
 class StatementEntryOut(BaseModel):

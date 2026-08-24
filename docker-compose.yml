@@ -1,7 +1,10 @@
 services:
   db:
     image: postgres:16-alpine
-    env_file: .env.example
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
     volumes:
       - db-data:/var/lib/postgresql/data
     healthcheck:
@@ -12,7 +15,10 @@ services:
 
   migrate:
     build: ./backend
-    env_file: .env.example
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
     command: ["uv", "run", "migrate-and-seed"]
     depends_on:
       db:
@@ -20,7 +26,10 @@ services:
 
   backend:
     build: ./backend
-    env_file: .env.example
+    env_file:
+      - path: .env.example
+      - path: .env
+        required: false
     ports:
       - "8000:8000"
     depends_on:

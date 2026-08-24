@@ -223,6 +223,44 @@ describe('History', () => {
     expect(within(records).getAllByRole('row')).toHaveLength(3)
   })
 
+  it('lets the customer inspect the entries stored in a confirmed record', async () => {
+    const august = {
+      ...snapshot('2026-08-01', '1575.00', '2600.00', '1025.00'),
+      income_entries: [
+        {
+          entry_id: 'income-1',
+          description: 'Wages',
+          original_amount: '2600.00',
+          original_frequency: 'monthly',
+          normalized_monthly_amount: '2600.00',
+          classification: null,
+        },
+      ],
+      outgoing_entries: [
+        {
+          entry_id: 'outgoing-1',
+          description: 'Weekend pottery',
+          original_amount: '25.00',
+          original_frequency: 'monthly',
+          normalized_monthly_amount: '25.00',
+          classification: null,
+        },
+      ],
+    }
+    getHistory.mockResolvedValue(
+      ok(historyResponse({ total: 1, snapshots: [august], series: [] })),
+    )
+
+    renderHistory()
+    await userEvent.click(
+      await screen.findByRole('button', { name: /view august 2026 statement details/i }),
+    )
+
+    expect(screen.getByText('Weekend pottery')).toBeInTheDocument()
+    expect(screen.getByText(/£25\.00 monthly/i)).toBeInTheDocument()
+    expect(screen.getByText('Wages')).toBeInTheDocument()
+  })
+
   it('pages through history without losing the change explanation', async () => {
     // More records than fit on one page, so paging controls are warranted.
     getHistory.mockResolvedValue(ok(historyResponse({ total: 20, limit: 12, offset: 0 })))

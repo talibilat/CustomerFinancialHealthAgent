@@ -7,6 +7,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.api.dependencies import get_db
+from customer_financial_health_api.providers.openai_client import optional_capability_status
+from customer_financial_health_api.settings import Settings, get_settings
 
 router = APIRouter()
 
@@ -25,15 +27,32 @@ def liveness() -> dict:
 
 
 @router.get("/health/ready")
-def readiness(response: Response, session: Session = Depends(get_db)) -> dict:
+def readiness(
+    response: Response,
+    session: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    capabilities = optional_capability_status(settings)
     try:
         current_revision = session.execute(text("select version_num from alembic_version")).scalar_one_or_none()
     except Exception:
         response.status_code = 503
-        return {"status": "not_ready", "database": "unreachable", "ai": "not_configured"}
+        return {
+            "status": "not_ready",
+            "database": "unreachable",
+            "optional_capabilities": capabilities,
+        }
 
     if current_revision != _expected_head_revision():
         response.status_code = 503
-        return {"status": "not_ready", "database": "schema_mismatch", "ai": "not_configured"}
+        return {
+            "status": "not_ready",
+            "database": "schema_mismatch",
+            "optional_capabilities": capabilities,
+        }
 
-    return {"status": "ready", "database": "ok", "ai": "not_configured"}
+    return {
+        "status": "ready",
+        "database": "ok",
+        "optional_capabilities": capabilities,
+    }
