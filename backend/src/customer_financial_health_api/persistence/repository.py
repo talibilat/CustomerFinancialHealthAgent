@@ -6,7 +6,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from customer_financial_health_api.domain.financial_health import (
@@ -657,3 +657,91 @@ def confirm_statement(
     )
 
     return _to_view(snapshot)
+
+
+@dataclass(frozen=True)
+class HistoryPage:
+    snapshots: tuple[ConfirmedSnapshotView, ...]
+    total: int
+    limit: int
+    offset: int
+
+
+def _superseded_ids(customer_id: uuid.UUID):
+    return select(ConfirmedSnapshot.supersedes_snapshot_id).where(
+        ConfirmedSnapshot.customer_id == customer_id,
+        ConfirmedSnapshot.supersedes_snapshot_id.is_not(None),
+    )
+
+
+def list_confirmed_history(
+    session: Session, *, customer_id: uuid.UUID, limit: int = 50, offset: int = 0
+) -> HistoryPage:
+    """Every confirmed snapshot this customer owns, newest period first.
+
+    Ordering is by the period the statement describes and then by when it was
+    confirmed, never by insertion order, so an out-of-order confirmation still
+    reads correctly. Corrections are retained here; only the series in
+    :func:`list_effective_series` collapses them.
+    """
+    total = session.execute(
+        select(func.count())
+        .select_from(ConfirmedSnapshot)
+        .where(ConfirmedSnapshot.customer_id == customer_id)
+    ).scalar_one()
+
+    rows = (
+        session.execute(
+            select(ConfirmedSnapshot)
+            .where(ConfirmedSnapshot.customer_id == customer_id)
+            .order_by(
+                ConfirmedSnapshot.statement_period.desc(),
+                ConfirmedSnapshot.confirmed_at.desc(),
+                ConfirmedSnapshot.id.desc(),
+            )
+            .limit(limit)
+            .offset(offset)
+        )
+        .scalars()
+        .all()
+    )
+
+    return HistoryPage(
+        snapshots=tuple(_to_view(row) for row in rows),
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def list_effective_series(
+    session: Session, *, customer_id: uuid.UUID
+) -> tuple[ConfirmedSnapshotView, ...]:
+    """One snapshot per period, oldest first, for reading across time.
+
+    A snapshot another one supersedes is excluded, so a corrected period shows
+    the correction rather than both. The full record stays in history.
+    """
+    rows = (
+        session.execute(
+            select(ConfirmedSnapshot)
+            .where(
+                ConfirmedSnapshot.customer_id == customer_id,
+                ConfirmedSnapshot.id.not_in(_superseded_ids(customer_id)),
+            )
+            .order_by(
+                ConfirmedSnapshot.statement_period.asc(),
+                ConfirmedSnapshot.confirmed_at.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    # Defensive: if a period somehow holds more than one non-superseded record,
+    # the latest confirmation represents it rather than both.
+    by_period: dict[date, ConfirmedSnapshot] = {}
+    for row in rows:
+        by_period[row.statement_period] = row
+
+    return tuple(_to_view(by_period[period]) for period in sorted(by_period))
