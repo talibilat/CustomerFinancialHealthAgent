@@ -1,7 +1,7 @@
 [project]
 name = "customer-financial-health-api"
 version = "0.1.0"
-description = "Add your description here"
+description = "Deterministic financial-health API for the Ophelos engineering take-home"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,7 +16,6 @@ dependencies = [
 ]
 
 [project.scripts]
-customer-financial-health-api = "customer_financial_health_api:main"
 migrate-and-seed = "customer_financial_health_api.scripts.migrate_and_seed:main"
 export-openapi = "customer_financial_health_api.scripts.export_openapi:main"
 

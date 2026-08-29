@@ -6,6 +6,10 @@ The product turns existing income and outgoing records into an explainable month
 Financial results are deterministic and auditable.
 Azure OpenAI is limited to unconfirmed outgoing-classification suggestions and optional personalized explanations.
 
+![Fictional customer overview showing exact monthly headroom](./docs/assets/overview.png)
+
+![Zero-income demonstration showing exact shortfall and deterministic support](./docs/assets/zero-income.png)
+
 ## Status
 
 Product discovery, primary-source research, domain language, architecture decisions, test seams, and Azure configuration are complete.
@@ -29,7 +33,7 @@ The overview now provides deterministic difficulty states for zero income, incom
 These states preserve exact pennies and select review, Ophelos support, and the official MoneyHelper Debt Advice Locator without using AI.
 Nine fictional demonstration presets can be loaded from the overview after an explicit reset warning and confirmation.
 Preset retries are idempotent, prior aggregates are preserved, and the reset endpoint is unavailable unless `DEMO_MODE=true`.
-The remaining planned journey step is personalized explanations.
+Optional personalized explanations are implemented, validated against approved deterministic facts, and replaceable by deterministic copy whenever Azure is unavailable or its output is rejected.
 
 ## Quick start
 
@@ -111,7 +115,7 @@ To regenerate the OpenAPI document and TypeScript client after a backend API cha
 ./scripts/check-generated-client.sh
 ```
 
-GitHub Actions runs that generated-contract check and the isolated Playwright suite for pull requests and pushes to `main`.
+GitHub Actions runs frontend lint, component tests, the production build, backend tests against PostgreSQL, the generated-contract check, the isolated Playwright suite, and the clean-environment smoke for pull requests and pushes to `main`.
 
 ## Product principles
 
@@ -160,7 +164,8 @@ The browser application is React and TypeScript built with Vite. The backend is 
 
 ## How the numbers are calculated
 
-All money is Python `Decimal` and fixed-precision PostgreSQL `NUMERIC(12,2)`. No binary floating point touches an amount.
+Backend financial calculation and storage use Python `Decimal` and fixed-precision PostgreSQL `NUMERIC(12,2)`.
+The frontend keeps monetary values as decimal strings for display, comparison, and sign handling rather than converting them to JavaScript `Number`.
 
 **Frequency normalization** converts a reported amount to an average month using one versioned policy, `normalization-policy-v1`:
 
@@ -196,7 +201,7 @@ Boundaries are explicit and inclusive, verified against the £931.25 basis:
 | 931.26 | - | -0.01 | not enough reported headroom |
 | 731.25 | 200.00 | 200.00 | appears manageable (meeting the buffer counts as meeting it) |
 | 731.26 | 200.00 | 199.99 | may leave limited room, shortfall 0.01 |
-| 100.00 | none | 831.25 | may leave limited room, `protected_buffer_missing` |
+| 100.00 | none | 831.25 | may leave limited room because no protected monthly buffer was provided |
 
 Without a customer-supplied buffer the result stays qualified rather than inventing a threshold to judge against.
 
@@ -208,7 +213,11 @@ Without a customer-supplied buffer the result stays qualified rather than invent
 
 **The data is fictional.** One seeded demonstration customer, no real people, no bank credentials, no account numbers.
 
-**Ownership is enforced, not deferred.** Production authentication is out of scope, but customer-scoped authorization is not. Every customer-owned record carries `customer_id`, and every read and write requires customer context. A request for another customer's statement, snapshot, correction, or saved scenario returns a response byte-identical to one for an identifier that never existed, so ownership cannot be discovered by trying identifiers. Tests compare whole responses rather than status codes, because differing wording would itself leak.
+**Customer-scoped ownership is enforced, while production identity is deferred.**
+The demonstration supplies one fixed fictional customer context instead of authenticating a real person.
+Within that context, every customer-owned record carries `customer_id`, and every read and write applies the customer scope.
+A request for another customer's statement, snapshot, correction, or saved scenario returns a response byte-identical to one for an identifier that never existed, so ownership cannot be discovered by trying identifiers.
+Tests compare whole responses rather than status codes because differing wording would itself leak.
 
 **Data sent to Azure OpenAI is minimal.** Classification receives an outgoing description and the approved category and treatment identifiers. It never receives amounts, the financial statement, or any identifier. Requests are stateless (`store=false`), with a ten-second timeout and one retry.
 
@@ -216,7 +225,18 @@ Without a customer-supplied buffer the result stays qualified rather than invent
 
 **Logs deliberately omit almost everything.** An unexpected failure records a correlation identifier, the operation, and the exception type - never the exception message and never a traceback, either of which can carry a connection string, a credential, or a reported amount. This makes production diagnosis harder from logs alone, and it is the only version that cannot leak.
 
-**Known limitations, stated plainly.** This is not production-ready and makes no compliance claim. There is no authentication, no authorization beyond the single demonstration customer, no encryption at rest beyond what PostgreSQL provides by default, no retention or deletion schedule, no rate limiting, and no monitoring. Multi-currency, Open Banking, and dated cash-flow forecasting are out of scope. The `.env` file is for local use only and must never carry a real key into source control.
+**Browser draft retention is deliberately limited.**
+An unfinished editable statement is copied to `sessionStorage` so an accidental refresh in the same browser tab does not discard the customer's work.
+The draft is removed after a successful update or confirmation, when the customer chooses to reload the latest saved version, and automatically when the tab session ends.
+Production authentication and sign-out would need to clear this state explicitly, namespace it to the authenticated customer, and apply an agreed retention policy.
+Only fictional data is used in this demonstration.
+
+**Known limitations, stated plainly.**
+This is not production-ready and makes no compliance claim.
+There is no production authentication or real customer session, no encryption policy beyond the local PostgreSQL defaults, no retention or deletion service, no rate limiting, and no monitoring.
+Customer-scoped object ownership checks are implemented and tested, but they do not replace authentication.
+Multi-currency, Open Banking, and dated cash-flow forecasting are out of scope.
+The `.env` file is for local use only and must never carry a real key into source control.
 
 ## Documentation
 
@@ -224,6 +244,8 @@ Without a customer-supplied buffer the result stays qualified rather than invent
 - [Complete coding-agent ingestion context](./docs/research/coding-agent-ingestion.md)
 - [Domain language](./CONTEXT.md)
 - [Decisions and scope](./DECISIONS.md)
+- [AI-assisted project history](./AI_PROMPT_HISTORY.md)
+- [Submission and interview preparation](./SUBMISSION_AND_INTERVIEW_PREPARATION.md)
 - [Archived source documents](./docs/archive/)
 
 ## Configuration
@@ -243,15 +265,17 @@ The first gated stretch item is a tested migration adding `currency` and `countr
 
 Production authentication, Open Banking, document verification, repayment recommendations, investment advice, autonomous agents, licensed Standard Financial Statement thresholds, and production compliance claims are explicit non-goals.
 
+The take-home demonstrates longitudinal behavior with fictional persisted statement periods, as permitted by the clarification that sample history was acceptable.
+The current customer UI does not create or select arbitrary new statement periods.
+A production journey would add authenticated period creation and selection while retaining the immutable correction model shown here.
+
 ## Submission reminders
 
 Every command documented above has been rerun and passed against the final repository state: the backend suite, the frontend component suite, the clean-environment Docker smoke, the Playwright journeys, and the separately gated live Azure classification check.
 
 The following remain outstanding and can only be done by the candidate. They are listed here because they are not done, not as a checklist that has been completed:
 
-- Record the actual design, research, implementation, testing, and documentation time in `DECISIONS.md`. It must not be estimated after the fact.
-- Export the complete AI prompt history and review it for credentials or unrelated sensitive material before sharing.
-- Add screenshots or a short demonstration recording of the connected journey.
+- Confirm whether the reviewer requires raw Codex exports in addition to the curated [AI-assisted project history](./AI_PROMPT_HISTORY.md).
 - Confirm the repository is public or shared with the reviewers, and send the submission at least 24 hours before the interview.
 
 No public deployment has been made, so no public URL is claimed.

@@ -26,7 +26,8 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LoadError } from '@/components/LoadError'
-import { formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
+import { compareMoney, formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
+import { warningCopy } from '@/lib/warning-copy'
 import { DemoPresetPicker } from './DemoPresetPicker'
 
 const RESULT_PRESENTATION: Record<
@@ -109,7 +110,7 @@ function reportedResilienceFigures(resilience: ResilienceOut): { label: string; 
 
   return candidates.filter(
     (candidate): candidate is { label: string; amount: string } =>
-      candidate.amount !== null && !(candidate.hideWhenZero && Number(candidate.amount) === 0),
+      candidate.amount !== null && !(candidate.hideWhenZero && compareMoney(candidate.amount, '0') === 0),
   )
 }
 
@@ -155,7 +156,7 @@ function ResilienceCard({ resilience }: { resilience: ResilienceOut }) {
             <AlertDescription>
               <ul>
                 {resilience.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{warningCopy(warning)}</li>
                 ))}
               </ul>
             </AlertDescription>
@@ -310,7 +311,7 @@ function OverviewContent({ overview }: { overview: OverviewResponse }) {
               <AlertDescription>
                 <ul>
                   {overview.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
+                    <li key={warning}>{warningCopy(warning)}</li>
                   ))}
                 </ul>
               </AlertDescription>

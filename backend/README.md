@@ -1,4 +1,4 @@
-# Customer Financial Health — backend
+# Customer Financial Health - backend
 
 FastAPI, pure Python domain modules, SQLAlchemy 2.0, Alembic, PostgreSQL.
 

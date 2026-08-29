@@ -21,7 +21,8 @@ import { Input } from '@/components/ui/input'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LoadError } from '@/components/LoadError'
-import { FREQUENCIES, formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
+import { compareMoney, FREQUENCIES, formatFrequency, formatGbp, formatPeriod } from '@/lib/format'
+import { warningCopy } from '@/lib/warning-copy'
 
 type FieldError = { field: string; code: string; message: string }
 
@@ -822,7 +823,7 @@ function PreviewPanel({ preview }: { preview: StatementPreviewResponse }) {
           </div>
         </div>
 
-        {Number(preview.normalized_monthly_irregular_costs) > 0 && (
+        {compareMoney(preview.normalized_monthly_irregular_costs, '0') > 0 && (
           <p className="text-sm text-muted-foreground">
             Irregular costs set aside {formatGbp(preview.normalized_monthly_irregular_costs)} a month.
             This is shown separately and is not part of the monthly headroom above.
@@ -842,7 +843,7 @@ function PreviewPanel({ preview }: { preview: StatementPreviewResponse }) {
             <AlertDescription>
               <ul>
                 {preview.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{warningCopy(warning)}</li>
                 ))}
               </ul>
             </AlertDescription>

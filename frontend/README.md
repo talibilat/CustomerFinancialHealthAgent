@@ -1,4 +1,4 @@
-# Customer Financial Health — frontend
+# Customer Financial Health - frontend
 
 React, TypeScript, Vite, TanStack Query, and shadcn/ui.
 

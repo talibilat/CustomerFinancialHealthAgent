@@ -188,7 +188,8 @@ describe('RepaymentExplorer', () => {
     await userEvent.type(screen.getByRole('textbox', { name: /amount you are considering/i }), '100.00')
     await userEvent.click(screen.getByRole('button', { name: /compare/i }))
 
-    expect(await screen.findByText('protected_buffer_missing')).toBeInTheDocument()
+    expect(await screen.findByText(/no protected monthly buffer has been provided/i)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('protected_buffer_missing')
   })
 
   it('states plainly that this changes nothing and is not advice', async () => {

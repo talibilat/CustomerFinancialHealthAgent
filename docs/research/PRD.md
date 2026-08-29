@@ -620,5 +620,8 @@ The root `CONTEXT.md` remains the concise canonical glossary, `DECISIONS.md` rem
 
 ## Current repository state
 
-Discovery, primary-source research, domain language, ADRs, design, test seams, Azure configuration, edge-case prioritization, and submission planning are complete.
-Application code, executable commands, migrations, tests, screenshots, prompt-history export, and actual time recording remain to be completed.
+Discovery, primary-source research, domain language, architecture decisions, design, test seams, Azure configuration, edge-case prioritization, and submission planning are complete.
+The connected React, FastAPI, PostgreSQL, Azure-adapter, migration, and Docker Compose implementation is complete for the committed take-home scope.
+Automated coverage includes domain, provider, persistence, API, component, accessibility, connected browser, generated-client, and clean-environment checks.
+The repository includes reviewer run commands, an edited three-chat AI history, a reconstructed and clearly qualified time record, interview preparation, and screenshots of the connected journey.
+Production authentication, arbitrary customer statement-period creation, a public deployment, and the listed stretch features remain outside the committed take-home scope.

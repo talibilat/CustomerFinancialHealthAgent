@@ -343,7 +343,8 @@ describe('Overview', () => {
 
     await screen.findByText('£500.00')
 
-    expect(screen.getByText('resilience_info_missing')).toBeInTheDocument()
+    expect(screen.getByText(/savings and a protected reserve have not both been provided/i)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('resilience_info_missing')
   })
 
   it('shows a limitation instead of blocking when resilience information is missing', async () => {
@@ -406,8 +407,8 @@ describe('Overview', () => {
             {
               code: 'contact_ophelos',
               label: 'Contact Ophelos support',
-              description: 'Talk to our support team placeholder.',
-              url: 'mailto:support@example.ophelos.com',
+              description: 'Use the official Ophelos contact page to choose the support option that works for you.',
+              url: 'https://www.ophelos.com/contact',
               external: false,
             },
             {
@@ -428,7 +429,12 @@ describe('Overview', () => {
     const result = (await screen.findByText('Reported outgoings are above income')).closest('[role="status"]')
     expect(result).not.toBeNull()
     expect(result).toHaveTextContent(/exact monthly shortfall of £0.01/i)
+    expect(screen.getByRole('link', { name: /contact Ophelos support/i })).toHaveAttribute(
+      'href',
+      'https://www.ophelos.com/contact',
+    )
     expect(screen.getByRole('link', { name: /free independent debt advice/i })).toHaveAttribute('target', '_blank')
+    expect(document.body.textContent).not.toMatch(/support team placeholder|support@example\.ophelos\.com/i)
     expect(document.body.textContent).not.toMatch(/disposable|failed affordability|must pay/i)
   })
 

@@ -55,8 +55,9 @@ REVIEW_INFORMATION = SupportRoute(
 CONTACT_OPHELOS = SupportRoute(
     code=SupportRouteCode.CONTACT_OPHELOS,
     label="Contact Ophelos support",
-    description="Talk to our support team placeholder about your circumstances and the options available.",
-    url="mailto:support@example.ophelos.com",
+    description="Use the official Ophelos contact page to choose the support option that works for you.",
+    url="https://www.ophelos.com/contact",
+    external=True,
 )
 MONEYHELPER_DEBT_ADVICE = SupportRoute(
     code=SupportRouteCode.MONEYHELPER_DEBT_ADVICE,

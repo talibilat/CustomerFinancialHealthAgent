@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { LoadError } from '@/components/LoadError'
 import { formatGbp, formatPeriod } from '@/lib/format'
+import { warningCopy } from '@/lib/warning-copy'
 
 type FieldError = { field: string; code: string; message: string }
 
@@ -134,7 +135,7 @@ function ScenarioResultPanel({ result }: { result: ScenarioResponse }) {
             <AlertDescription>
               <ul>
                 {result.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{warningCopy(warning)}</li>
                 ))}
               </ul>
             </AlertDescription>

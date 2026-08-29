@@ -19,7 +19,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { LoadError } from '@/components/LoadError'
-import { formatGbp, formatPeriod } from '@/lib/format'
+import { compareMoney, formatGbp, formatPeriod, magnitudeOfMoney } from '@/lib/format'
+import { warningCopy } from '@/lib/warning-copy'
 
 const PAGE_SIZE = 12
 
@@ -125,10 +126,11 @@ function ChangeSummary({ change }: { change: ChangeExplanationOut }) {
     )
   }
 
-  const total = Number(change.monthly_headroom_change ?? '0')
-  const Icon = total > 0 ? TrendingUp : total < 0 ? TrendingDown : Minus
-  const direction = total > 0 ? 'more' : total < 0 ? 'less' : 'the same'
-  const magnitude = formatGbp(String(Math.abs(total)))
+  const total = change.monthly_headroom_change ?? '0'
+  const comparison = compareMoney(total, '0')
+  const Icon = comparison > 0 ? TrendingUp : comparison < 0 ? TrendingDown : Minus
+  const direction = comparison > 0 ? 'more' : comparison < 0 ? 'less' : 'the same'
+  const magnitude = formatGbp(magnitudeOfMoney(total))
 
   return (
     <Card>
@@ -138,7 +140,7 @@ function ChangeSummary({ change }: { change: ChangeExplanationOut }) {
         </CardDescription>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Icon aria-hidden="true" className="size-5" />
-          {total === 0 ? (
+          {comparison === 0 ? (
             <span>Your monthly headroom is the same</span>
           ) : (
             <span>
@@ -193,7 +195,7 @@ function ChangeSummary({ change }: { change: ChangeExplanationOut }) {
             <AlertDescription>
               <ul>
                 {change.warnings.map((warning) => (
-                  <li key={warning}>{warning}</li>
+                  <li key={warning}>{warningCopy(warning)}</li>
                 ))}
               </ul>
             </AlertDescription>

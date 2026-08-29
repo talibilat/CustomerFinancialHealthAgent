@@ -460,7 +460,8 @@ describe('StatementEditor', () => {
     expect(bodyText).not.toMatch(/you can afford/i)
     expect(bodyText).not.toMatch(/\bhealthy\b/i)
     expect(bodyText).toMatch(/not a proof of long-term affordability/i)
-    expect(screen.getByText('looking_ahead_info_missing')).toBeInTheDocument()
+    expect(screen.getByText(/no irregular costs, future provisions, or expected changes/i)).toBeInTheDocument()
+    expect(document.body.textContent).not.toContain('looking_ahead_info_missing')
   })
 })
 

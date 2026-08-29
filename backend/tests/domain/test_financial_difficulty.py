@@ -60,12 +60,14 @@ def test_support_routes_are_fixed_and_safe_for_a_reported_shortfall():
         SupportRouteCode.MONEYHELPER_DEBT_ADVICE,
     ]
     assert result.support_routes[-1].url == "https://www.moneyhelper.org.uk/en/money-troubles/dealing-with-debt/debt-advice-locator"
+    assert result.support_routes[1].url == "https://www.ophelos.com/contact"
     combined_copy = " ".join(
         [result.title, result.explanation]
         + [route.label + " " + route.description for route in result.support_routes]
     ).lower()
     for unsafe_phrase in ("failed", "afford", "must pay", "act now", "congratulations", "disposable"):
         assert unsafe_phrase not in combined_copy
+    assert "placeholder" not in combined_copy
 
 
 def test_protected_outgoings_take_precedence_over_general_shortfall_copy():

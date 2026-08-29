@@ -38,10 +38,21 @@ Production work would also require authentication, authorization, retention, del
 
 ## Time spent
 
-Implementation time has not yet been recorded in the repository.
-The candidate must add the actual design, research, implementation, testing, and documentation time before submission rather than estimate it after the fact.
+Time was not tracked contemporaneously during the AI-assisted build, so the project record uses a reconstructed range rather than false precision.
+The range was reconstructed from the three Codex chats, commit clusters, pull-request sequencing, and the candidate's preparation record.
+
+- Product research and design: approximately 4 to 5 hours.
+- Implementation and AI orchestration: approximately 8 to 11 hours.
+- Testing, debugging, review, and integration: approximately 4 to 5 hours.
+- Documentation and submission preparation: approximately 2 to 3 hours.
+- Interview preparation: approximately 3 to 4 hours.
+- Total: approximately 21 to 28 hours.
+
+The 3 to 4 hours of interview preparation are separate from the reconstructed project-build range and are not presented as the implementation total.
 
 ## AI prompt history
 
-This Codex task is the source prompt history for the design and implementation work.
-The candidate must export or share the complete task before submission and must remove any credentials or unrelated sensitive information from the exported artifact.
+The project was developed across three Codex chats covering design, domain refinement, and implementation.
+[AI_PROMPT_HISTORY.md](./AI_PROMPT_HISTORY.md) provides an edited summary of the substantive prompts, GPT responses, candidate decisions, corrections, and final outcomes.
+It identifies all three source task IDs and explains what was removed for clarity or security.
+The complete source chats remain available in Codex and can be shared separately if a raw export is required.

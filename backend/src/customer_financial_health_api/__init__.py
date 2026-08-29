@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from customer-financial-health-api!")
+"""Customer financial-health API package."""
